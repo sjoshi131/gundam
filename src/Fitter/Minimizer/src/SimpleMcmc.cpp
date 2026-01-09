@@ -110,7 +110,7 @@ void SimpleMcmc::configureImpl(){
 
   // Get the sequence for the burn-in.
   _burninSequence_
-    = R"cxx(for (int chain = 0; chain < gMCMC.Burning(); ++chain) {
+    = R"cxx(for (int chain = 0; chain < gMCMC.Burnin(); ++chain) {
       gMCMC.RunChain("Burn-in chain", chain);})cxx";
   _config_.fillValue(_burninSequence_,"burninSequence");
 
