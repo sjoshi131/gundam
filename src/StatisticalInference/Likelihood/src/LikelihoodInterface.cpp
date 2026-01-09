@@ -387,8 +387,6 @@ void LikelihoodInterface::loadDataPropagator(){
     // copy the events directly from the model
     LogInfo << "Copying events from the model..." << std::endl;
     _dataPropagator_.copyEventsFrom( _modelPropagator_ );
-    _dataPropagator_.getDialManager().shrinkDialContainers();
-    _dataPropagator_.buildDialCache();
 
     // move the model back to the prior
     if( _dataType_ == DataType::Toy ){
@@ -449,10 +447,9 @@ void LikelihoodInterface::loadDataPropagator(){
       throwToyParameters(_dataPropagator_);
     } // throw asimov?
 
+    LogInfo << "Propagating weights on data events..." << std::endl;
+    _dataPropagator_.reweightEvents();
   }
-
-  LogInfo << "Propagating weights on data events..." << std::endl;
-  _dataPropagator_.reweightEvents();
 
   LogInfo << "Filling up data sample bin caches..." << std::endl;
   _threadPool_.runJob([this](int iThread){
