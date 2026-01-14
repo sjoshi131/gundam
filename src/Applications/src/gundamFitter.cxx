@@ -219,6 +219,7 @@ int main(int argc, char** argv){
         {"generateOneSigmaPlots", "OneSigma"},
         {"enablePca", "PCA"},
         {"skipHesse", "NoHesse"},
+        {"disableParLimits", "NoLimits"},
         {"kickMc", "KickMc"},
         {"lightOutputMode", "Light"},
         {"toyFit", "ToyFit"},
