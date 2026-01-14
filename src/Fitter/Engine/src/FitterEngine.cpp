@@ -144,11 +144,11 @@ void FitterEngine::initializeImpl(){
     LogWarning << "Disabling parameter limits..." << std::endl;
     for( auto& parSet : getLikelihoodInterface().getModelPropagator().getParametersManager().getParameterSetsList() ){
       for( auto& par: parSet.getParameterList() ) {
-        par.setLimits( {-std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity()} );
+        par.setLimits( {std::nan("unset"), std::nan("unset")} );
       }
 
       for( auto& par : parSet.getEigenParameterList() ) {
-        par.setLimits( {-std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity()} );
+        par.setLimits( {std::nan("unset"), std::nan("unset")} );
       }
     }
   }
