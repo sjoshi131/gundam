@@ -55,6 +55,7 @@ int main(int argc, char** argv){
   clParser.addDummyOption("Fit options");
   clParser.addTriggerOption("asimov", {"-a", "--asimov"}, "Use MC dataset to fill the data histograms");
   clParser.addTriggerOption("skipHesse", {"--skip-hesse"}, "Don't perform postfit error evaluation");
+  clParser.addTriggerOption("disableParLimits", {"--disable-limits"}, "Don't use limits during the fit");
   clParser.addOption("toyFit", {"--toy"}, "Run a toy fit (optional arg to provide toy index)", 1, true);
   clParser.addOption("injectParameterConfig", {"--inject-parameters"}, "Inject parameters defined in the provided config file");
   clParser.addOption("injectToyParameters", {"--inject-toy-parameter"}, "Inject parameters defined in the provided config file");
@@ -280,6 +281,8 @@ int main(int argc, char** argv){
   FitterEngine fitter(GenericToolbox::mkdirTFile(app.getOutfilePtr(), "FitterEngine"));
 
   gundamFitterConfig.fillValue(fitter.getConfig(), "fitterEngineConfig");
+
+  fitter.setDisableParLimits( clParser.isOptionTriggered("disableParLimits") );
 
   LogInfo << std::endl;
   LogInfo << "──────────────────────────────────" << std::endl;
