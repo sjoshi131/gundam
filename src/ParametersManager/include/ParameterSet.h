@@ -39,6 +39,8 @@ public:
 
   // setters
   void setEnableDebugPrintout(bool enableDebugPrintout_){ _enableDebugPrintout_ = enableDebugPrintout_; }
+  void setGlobalParRange(GenericToolbox::Range globalParRange_){ _globalParRange_ = globalParRange_; }
+  void setEigenParRange(GenericToolbox::Range eigenParRange_){ _eigenParRange_ = eigenParRange_; }
 
 
   /// Process the input covariance matrix to make sure that fixed, free, and
