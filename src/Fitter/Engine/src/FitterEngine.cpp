@@ -140,6 +140,22 @@ void FitterEngine::initializeImpl(){
     getLikelihoodInterface().getPlotGenerator().configure(ConfigReader());
   }
 
+  if( _disableParLimits_ ) {
+    LogWarning << "Disabling parameter limits..." << std::endl;
+    for( auto& parSet : getLikelihoodInterface().getModelPropagator().getParametersManager().getParameterSetsList() ){
+      parSet.setGlobalParRange({std::nan("unset"), std::nan("unset")});
+      parSet.setEigenParRange({std::nan("unset"), std::nan("unset")});
+
+      for( auto& par: parSet.getParameterList() ) {
+        par.setLimits( {std::nan("unset"), std::nan("unset")} );
+      }
+
+      for( auto& par : parSet.getEigenParameterList() ) {
+        par.setLimits( {std::nan("unset"), std::nan("unset")} );
+      }
+    }
+  }
+
   getLikelihoodInterface().initialize();
 
   _parameterScanner_.setLikelihoodInterfacePtr( &getLikelihoodInterface() );

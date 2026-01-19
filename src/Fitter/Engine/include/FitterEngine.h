@@ -67,6 +67,7 @@ public:
   void setThrowGain(double throwGain_){ _throwGain_ = throwGain_; }
   void setPcaThreshold(double pcaThreshold_){ _pcaThreshold_ = pcaThreshold_; }
   void setPcaMethod(PcaMethod pcaMethod_){ _pcaMethod_ = pcaMethod_; }
+  void setDisableParLimits(bool disableParLimits_){ _disableParLimits_ = disableParLimits_; }
 
   // const-getters
   [[nodiscard]] auto& getPreFitParState() const{ return _preFitParState_; }
@@ -102,6 +103,7 @@ private:
   bool _generateOneSigmaPlots_{false};
   bool _doAllParamVariations_{false};
   bool _scaleParStepWithChi2Response_{false};
+  bool _disableParLimits_{false};
   double _throwGain_{1.};
   double _parStepGain_{0.1};
   bool _savePostfitEventTrees_{false};
