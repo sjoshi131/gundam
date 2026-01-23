@@ -520,10 +520,11 @@ void RootMinimizer::calcErrors(){
     }
 
     int covStatus = _rootMinimizer_->CovMatrixStatus();
+    int hesseStatusCode = _rootMinimizer_->Status();
 
     auto hesseStats = std::make_unique<TTree>("hesseStats", "hesseStats");
     hesseStats->SetDirectory(nullptr);
-    hesseStats->Branch("hesseSuccess", &_fitHasConverged_);
+    hesseStats->Branch("hesseStatusCode", &hesseStatusCode);
     hesseStats->Branch("covStatusCode", &covStatus);
 
     double errorTimeInSec = errorStopWatch.eval().count();
