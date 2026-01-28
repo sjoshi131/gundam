@@ -28,7 +28,7 @@ void Bilinear::buildDial(const TH2& h2_){
     for (int i=1; i<=ny; ++i) {
         _splineData_.emplace_back(h2_.GetYaxis()->GetBinCenter(i));
     }
-    _splineBounds_.emplace_back(h2_.GetYaxis()->GetBinCenter(1), h2_.GetYaxis()->GetBinCenter(nx));
+    _splineBounds_.emplace_back(h2_.GetYaxis()->GetBinCenter(1), h2_.GetYaxis()->GetBinCenter(ny));
     for (int i = 1; i <= nx; ++i) {
         for (int j = 1; j <= ny; ++j) {
             _splineData_.emplace_back(h2_.GetBinContent(i,j));
