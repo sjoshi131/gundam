@@ -48,7 +48,6 @@ public:
   [[nodiscard]] auto getIndex() const{ return _index_; }
   [[nodiscard]] auto& getName() const{ return _name_; }
   [[nodiscard]] auto& getSelectionCutsStr() const{ return _selectionCutStr_; }
-  [[nodiscard]] auto& getSampleWeightVar() const{ return _sampleWeightVar_; }
   [[nodiscard]] auto& getSampleWeightFormula() const{ return _sampleWeightFormula_; }
   [[nodiscard]] auto& getSampleWeightFormulaStr() const{ return _sampleWeightFormulaStr_; }
   [[nodiscard]] auto& getBinningFilePath() const{ return _binningConfig_; }
@@ -84,7 +83,6 @@ private:
   int _index_{-1};
   std::string _name_;
   std::string _selectionCutStr_;
-  std::string _sampleWeightVar_;
   std::string _sampleWeightFormulaStr_;
   ConfigReader _binningConfig_;
   std::vector<std::string> _enabledDatasetList_;

@@ -21,7 +21,6 @@ void Sample::prepareConfig(ConfigReader &config_){
     {"disableEventMcThrow"},
     {"binning", {"binningFile", "binningFilePath"}},
     {"selectionCutStr", {"selectionCuts"}},
-    {"sampleWeightVar"},
     {"sampleWeightFormula"},
     {"datasets"},
     // for xsec
@@ -39,7 +38,6 @@ void Sample::configureImpl(){
   _config_.fillValue(_disableEventMcThrow_, "disableEventMcThrow");
   _config_.fillValue(_binningConfig_, "binning");
   _config_.fillValue(_selectionCutStr_, "selectionCutStr");
-  _config_.fillValue(_sampleWeightVar_, "sampleWeightVar");
   _config_.fillValue(_sampleWeightFormulaStr_, "sampleWeightFormula");
   _config_.fillValue(_enabledDatasetList_, "datasets");
 

@@ -1276,20 +1276,6 @@ void DataDispenser::loadEvent(int iThread_){
         continue;
       }
 
-      if( not eventSample.getSampleWeightVar().empty() ){
-        double sampleWeight = eventIndexingBuffer.getVariables().fetchVariable(eventSample.getSampleWeightVar()).getVarAsDouble();
-        if( sampleWeight == 0 ) {
-          // skip it
-          continue;
-        }
-        if( sampleWeight < 0 ) {
-          LogError << "Negative sampleWeight:" << sampleWeight << std::endl;
-          LogError << "sampleWeight buffer is: " << eventIndexingBuffer.getSummary() << std::endl;
-          LogExit("Negative sampleWeight");
-        }
-        eventIndexingBuffer.getWeights().base *= sampleWeight;
-      }
-
       // dial collections may come with a condition formula
       if( eventSample.getSampleWeightFormula() != nullptr ){
         double sampleWeight = LoaderUtils::evalFormula(eventIndexingBuffer, eventSample.getSampleWeightFormula().get());
