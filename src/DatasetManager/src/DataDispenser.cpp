@@ -1290,6 +1290,21 @@ void DataDispenser::loadEvent(int iThread_){
         eventIndexingBuffer.getWeights().base *= sampleWeight;
       }
 
+      // dial collections may come with a condition formula
+      if( eventSample.getSampleWeightFormula() != nullptr ){
+        double sampleWeight = LoaderUtils::evalFormula(eventIndexingBuffer, eventSample.getSampleWeightFormula().get());
+        if( sampleWeight == 0 ) {
+          // skip it
+          continue;
+        }
+        if( sampleWeight < 0 ) {
+          LogError << "Negative sampleWeight:" << sampleWeight << std::endl;
+          LogError << "sampleWeight buffer is: " << eventIndexingBuffer.getSummary() << std::endl;
+          LogExit("Negative sampleWeight");
+        }
+        eventIndexingBuffer.getWeights().base *= sampleWeight;
+      }
+
       // dialIndexTreeFormula is modified by the TChain reader
       int dialCloneArrayIndex{0};
       if( threadSharedData.buffer.dialIndex != nullptr ){
