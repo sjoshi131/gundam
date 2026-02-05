@@ -21,6 +21,7 @@ void Sample::prepareConfig(ConfigReader &config_){
     {"disableEventMcThrow"},
     {"binning", {"binningFile", "binningFilePath"}},
     {"selectionCutStr", {"selectionCuts"}},
+    {"sampleWeightVar"},
     {"datasets"},
     // for xsec
     {"parSetBinning", {"parameterSetName"}},
@@ -37,6 +38,7 @@ void Sample::configureImpl(){
   _config_.fillValue(_disableEventMcThrow_, "disableEventMcThrow");
   _config_.fillValue(_binningConfig_, "binning");
   _config_.fillValue(_selectionCutStr_, "selectionCutStr");
+  _config_.fillValue(_sampleWeightVar_, "sampleWeightVar");
   _config_.fillValue(_enabledDatasetList_, "datasets");
 
   LogThrowIf(_name_.empty(), "No name was provided for sample #" << _index_ << std::endl << _config_);
