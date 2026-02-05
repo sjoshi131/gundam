@@ -76,6 +76,9 @@ std::vector<std::string> SampleSet::fetchRequestedVariablesForIndexing() const{
     for (auto &binContext: sample.getHistogram().getBinContextList()) {
       for (auto &edges: binContext.bin.getEdgesList()) { GenericToolbox::addIfNotInVector(edges.varName, out); }
     }
+    if(not sample.getSampleWeightVar().empty()) {
+      GenericToolbox::addIfNotInVector(sample.getSampleWeightVar(), out);
+    }
   }
   return out;
 }
