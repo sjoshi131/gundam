@@ -79,6 +79,11 @@ std::vector<std::string> SampleSet::fetchRequestedVariablesForIndexing() const{
     if(not sample.getSampleWeightVar().empty()) {
       GenericToolbox::addIfNotInVector(sample.getSampleWeightVar(), out);
     }
+    if( sample.getSampleWeightFormula() != nullptr ) {
+      for( int iPar = 0 ; iPar < sample.getSampleWeightFormula()->GetNpar() ; iPar++ ){
+        GenericToolbox::addIfNotInVector(sample.getSampleWeightFormula()->GetParName(iPar), out);
+      }
+    }
   }
   return out;
 }
