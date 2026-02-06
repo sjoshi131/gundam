@@ -28,7 +28,7 @@ void Bicubic::buildDial(const TH2& h2_){
     for (int i=1; i<=ny; ++i) {
         _splineData_.emplace_back(h2_.GetYaxis()->GetBinCenter(i));
     }
-    _splineBounds_.emplace_back(h2_.GetYaxis()->GetBinCenter(1), h2_.GetYaxis()->GetBinCenter(nx));
+    _splineBounds_.emplace_back(h2_.GetYaxis()->GetBinCenter(1), h2_.GetYaxis()->GetBinCenter(ny));
     for (int i = 1; i <= nx; ++i) {
         for (int j = 1; j <= ny; ++j) {
             _splineData_.emplace_back(h2_.GetBinContent(i,j));
@@ -44,8 +44,8 @@ double Bicubic::evalResponse(const DialInputBuffer& input_) const {
     if( not _allowExtrapolation_ ){
         if (input0 < _splineBounds_[0].min) input0 = _splineBounds_[0].min;
         if (input0 > _splineBounds_[0].max) input0 = _splineBounds_[0].max;
-        if (input1 < _splineBounds_[1].min) input0 = _splineBounds_[1].min;
-        if (input1 > _splineBounds_[1].max) input0 = _splineBounds_[1].max;
+        if (input1 < _splineBounds_[1].min) input1 = _splineBounds_[1].min;
+        if (input1 > _splineBounds_[1].max) input1 = _splineBounds_[1].max;
     }
 
     const double *data = _splineData_.data();
