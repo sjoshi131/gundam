@@ -21,6 +21,7 @@ void Sample::prepareConfig(ConfigReader &config_){
     {"disableEventMcThrow"},
     {"binning", {"binningFile", "binningFilePath"}},
     {"selectionCutStr", {"selectionCuts"}},
+    {"sampleWeightFormula"},
     {"datasets"},
     // for xsec
     {"parSetBinning", {"parameterSetName"}},
@@ -37,6 +38,7 @@ void Sample::configureImpl(){
   _config_.fillValue(_disableEventMcThrow_, "disableEventMcThrow");
   _config_.fillValue(_binningConfig_, "binning");
   _config_.fillValue(_selectionCutStr_, "selectionCutStr");
+  _config_.fillValue(_sampleWeightFormulaStr_, "sampleWeightFormula");
   _config_.fillValue(_enabledDatasetList_, "datasets");
 
   LogThrowIf(_name_.empty(), "No name was provided for sample #" << _index_ << std::endl << _config_);
@@ -44,6 +46,15 @@ void Sample::configureImpl(){
   if( not _isEnabled_ ){
     LogDebugIf(GundamGlobals::isDebug()) << "-> disabled" << std::endl;
     return;
+  }
+
+  if (not _sampleWeightFormulaStr_.empty()) {
+    _sampleWeightFormula_ = std::make_shared<TFormula>(
+      "_sampleWeightFormula_",
+      _sampleWeightFormulaStr_.c_str()
+    );
+    LogThrowIf(not _sampleWeightFormula_->IsValid(),
+               "\"" << _sampleWeightFormulaStr_ << "\": could not be parsed as formula expression.");
   }
 
   LogDebugIf(GundamGlobals::isDebug()) << "Reading binning: " << _binningConfig_ << std::endl;

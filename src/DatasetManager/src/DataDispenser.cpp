@@ -49,7 +49,7 @@ void DataDispenser::prepareConfig(ConfigReader &config_){
     {"dialIndexFormula"},
     {"overridePropagatorConfig"},
     {"selectionCutFormula"},
-    {"nominalWeightFormula"},
+    {"nominalTreeWeightFormula", {"nominalWeightFormula"}},
     {"variableDict", {"overrideLeafDict"}},
     {"fromModel", {"fromMc"}},
     {"evalModelAt"},
@@ -130,7 +130,7 @@ void DataDispenser::configureImpl(){
   _config_.fillValue(_parameters_.evalModelAt, "evalModelAt");
 
   _config_.fillFormula(_parameters_.selectionCutFormulaStr, "selectionCutFormula", "&&");
-  _config_.fillFormula(_parameters_.nominalWeightFormulaStr, "nominalWeightFormula", "*");
+  _config_.fillFormula(_parameters_.nominalWeightFormulaStr, "nominalTreeWeightFormula", "*");
 
 }
 void DataDispenser::initializeImpl(){
@@ -1274,6 +1274,21 @@ void DataDispenser::loadEvent(int iThread_){
           }
         }
         continue;
+      }
+
+      // dial collections may come with a condition formula
+      if( eventSample.getSampleWeightFormula() != nullptr ){
+        double sampleWeight = LoaderUtils::evalFormula(eventIndexingBuffer, eventSample.getSampleWeightFormula().get());
+        if( sampleWeight == 0 ) {
+          // skip it
+          continue;
+        }
+        if( sampleWeight < 0 ) {
+          LogError << "Negative sampleWeight:" << sampleWeight << std::endl;
+          LogError << "sampleWeight buffer is: " << eventIndexingBuffer.getSummary() << std::endl;
+          LogExit("Negative sampleWeight");
+        }
+        eventIndexingBuffer.getWeights().base *= sampleWeight;
       }
 
       // dialIndexTreeFormula is modified by the TChain reader

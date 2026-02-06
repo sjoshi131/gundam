@@ -48,6 +48,8 @@ public:
   [[nodiscard]] auto getIndex() const{ return _index_; }
   [[nodiscard]] auto& getName() const{ return _name_; }
   [[nodiscard]] auto& getSelectionCutsStr() const{ return _selectionCutStr_; }
+  [[nodiscard]] auto& getSampleWeightFormula() const{ return _sampleWeightFormula_; }
+  [[nodiscard]] auto& getSampleWeightFormulaStr() const{ return _sampleWeightFormulaStr_; }
   [[nodiscard]] auto& getBinningFilePath() const{ return _binningConfig_; }
   [[nodiscard]] auto& getHistogram() const{ return _histogram_; }
   [[nodiscard]] auto& getEventList() const{ return _eventList_; }
@@ -81,6 +83,7 @@ private:
   int _index_{-1};
   std::string _name_;
   std::string _selectionCutStr_;
+  std::string _sampleWeightFormulaStr_;
   ConfigReader _binningConfig_;
   std::vector<std::string> _enabledDatasetList_;
 
@@ -90,6 +93,7 @@ private:
   Histogram _histogram_{};
   std::vector<Event> _eventList_{};
   std::vector<DatasetProperties> _loadedDatasetList_{};
+  std::shared_ptr<TFormula> _sampleWeightFormula_{nullptr};
 
 };
 
