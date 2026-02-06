@@ -1387,8 +1387,16 @@ void DataDispenser::loadEvent(int iThread_){
           // dialBase is valid -> store it
           if( eventByEventDialBuffer[dialCollectionRef->getIndex()] != nullptr ){
             size_t freeSlotDial = dialCollectionRef->getNextDialFreeSlot();
-            dialCollectionRef->getDialInterfaceList()[freeSlotDial].getDial().dialPtr
-              = std::unique_ptr<DialBase>(eventByEventDialBuffer[dialCollectionRef->getIndex()]);
+
+            if( iSample == 0 ) {
+              dialCollectionRef->getDialInterfaceList()[freeSlotDial].getDial().dialPtr
+                = std::unique_ptr<DialBase>(eventByEventDialBuffer[dialCollectionRef->getIndex()]);
+            }
+            else {
+              // cloning the dial ptr, otherwise the ownership will be lost
+              dialCollectionRef->getDialInterfaceList()[freeSlotDial].getDial().dialPtr
+                = std::unique_ptr<DialBase>(eventByEventDialBuffer[dialCollectionRef->getIndex()]->clone());
+            }
 
             dialEntryPtr->collectionIndex = dialCollectionRef->getIndex();
             dialEntryPtr->interfaceIndex = freeSlotDial;
