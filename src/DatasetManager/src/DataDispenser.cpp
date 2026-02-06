@@ -49,6 +49,7 @@ void DataDispenser::prepareConfig(ConfigReader &config_){
     {"dialIndexFormula"},
     {"overridePropagatorConfig"},
     {"selectionCutFormula"},
+    {"allowMultipleSamplesPerEntry"},
     {"nominalTreeWeightFormula", {"nominalWeightFormula"}},
     {"variableDict", {"overrideLeafDict"}},
     {"fromModel", {"fromMc"}},
@@ -128,6 +129,7 @@ void DataDispenser::configureImpl(){
   _config_.fillValue(_parameters_.dialIndexFormula, "dialIndexFormula");
   _config_.fillValue(_parameters_.overridePropagatorConfig, "overridePropagatorConfig");
   _config_.fillValue(_parameters_.evalModelAt, "evalModelAt");
+  _config_.fillValue(_parameters_.allowMultipleSamplesPerEntry, "allowMultipleSamplesPerEntry");
 
   _config_.fillFormula(_parameters_.selectionCutFormulaStr, "selectionCutFormula", "&&");
   _config_.fillFormula(_parameters_.nominalWeightFormulaStr, "nominalTreeWeightFormula", "*");
@@ -302,7 +304,8 @@ void DataDispenser::doEventSelection(){
   _cache_.threadSelectionResults.resize(nThreads);
   for( auto& threadResults : _cache_.threadSelectionResults ){
     threadResults.sampleNbOfEvents.resize(_cache_.samplesToFillList.size(), 0);
-    threadResults.entrySampleIndexList.resize(nEntries, -1);
+    threadResults.entrySampleIndexList.resize(nEntries);
+    for (auto& sampleIdxList : threadResults.entrySampleIndexList){ sampleIdxList.clear(); sampleIdxList.reserve(1); }
   }
 
   if( not _owner_->isDevSingleThreadEventSelection() ) {
@@ -318,7 +321,11 @@ void DataDispenser::doEventSelection(){
 
   LogInfo << "Merging thread results..." << std::endl;
   _cache_.sampleNbOfEvents.resize(_cache_.samplesToFillList.size(), 0);
-  _cache_.entrySampleIndexList.resize(nEntries, -1);
+
+  // get minimum overhead with low capacity
+  _cache_.entrySampleIndexList.resize(nEntries);
+  for (auto& sampleIdxList : _cache_.entrySampleIndexList){ sampleIdxList.clear(); sampleIdxList.reserve(1); }
+
   for( auto& threadResults : _cache_.threadSelectionResults ){
     // merging nEvents
 
@@ -327,7 +334,7 @@ void DataDispenser::doEventSelection(){
     }
 
     for( size_t iEntry = 0 ; iEntry < int(_cache_.entrySampleIndexList.size()) ; iEntry++ ){
-      if( threadResults.entrySampleIndexList[iEntry] != -1 ){
+      if( not threadResults.entrySampleIndexList[iEntry].empty() ){
         _cache_.entrySampleIndexList[iEntry] = threadResults.entrySampleIndexList[iEntry];
       }
     }
@@ -881,9 +888,7 @@ void DataDispenser::eventSelectionFunction(int iThread_){
 
     if ( selectionCutLeafFormIndex != -1 ){
       if( tb.getExpressionBufferList()[selectionCutLeafFormIndex]->getBuffer().getValueAsDouble() == 0 ){
-        for (size_t iSample = 0; iSample < _cache_.samplesToFillList.size(); iSample++) {
-          threadSelectionResults.entrySampleIndexList[iEntry] = -1;
-        }
+        // skip it
         continue;
       }
     }
@@ -895,12 +900,12 @@ void DataDispenser::eventSelectionFunction(int iThread_){
       if(  sampleCut.cutIndex == -1  // no cut?
            or tb.getExpressionBufferList()[sampleCut.cutIndex]->getBuffer().getValueAsDouble() != 0 // pass cut?
           ){
-        if( sampleHasBeenFound ){
+        if( not _parameters_.allowMultipleSamplesPerEntry and sampleHasBeenFound ){
           LogError << "Entry #" << iEntry << "already has a sample." << std::endl;
-          LogExit("Multi-sample event isn't handled yet by GUNDAM.");
+          LogExit("Multi-sample event isn't enabled. By default, `allowMultipleSamplesPerEntry: false` by default.");
         }
         sampleHasBeenFound = true;
-        threadSelectionResults.entrySampleIndexList[iEntry] = sampleCut.sampleIndex;
+        threadSelectionResults.entrySampleIndexList[iEntry].emplace_back(sampleCut.sampleIndex);
         threadSelectionResults.sampleNbOfEvents[sampleCut.sampleIndex]++;
       }
       else{
@@ -1009,7 +1014,7 @@ void DataDispenser::runEventFillThreads(int iThread_){
   for( Long64_t iEntry = bounds.beginIndex ; iEntry < bounds.endIndex ; iEntry++ ){
 
     // before load, check if it has a sample
-    bool hasSample = _cache_.entrySampleIndexList[iEntry] != -1;
+    bool hasSample = not _cache_.entrySampleIndexList[iEntry].empty();
     if( not hasSample ){ continue; }
 
     Int_t nBytes{ threadSharedData.treeChain->GetEntry(iEntry) };
@@ -1193,7 +1198,6 @@ void DataDispenser::loadEvent(int iThread_){
 
 
   // buffers
-  int iSample{-1};
   size_t sampleEventIndex{};
 
   // make sure isEventFillerReady flag is true in this scope
@@ -1203,6 +1207,9 @@ void DataDispenser::loadEvent(int iThread_){
   };
 
   std::unordered_map<int, const TObject**> dialAddressMap;
+  std::vector<int> sampleIdxList;
+  std::vector<int> sampleBinIdxList;
+  std::vector<double> sampleWeightList;
 
   while( true ){
 
@@ -1252,44 +1259,51 @@ void DataDispenser::loadEvent(int iThread_){
       eventIndexingBuffer.getIndices().treeEntry = threadSharedData.treeChain->GetTree()->GetReadEntry();
 
       // get sample index / all -1 samples have been ruled out by the chain reader
-      iSample = _cache_.entrySampleIndexList[eventIndexingBuffer.getIndices().entry];
-      Sample& eventSample{*_cache_.samplesToFillList[iSample]};
+      sampleIdxList = _cache_.entrySampleIndexList[eventIndexingBuffer.getIndices().entry];
+      sampleBinIdxList.clear(); sampleBinIdxList.reserve(sampleIdxList.size());
+      sampleWeightList.clear(); sampleWeightList.reserve(sampleIdxList.size());
 
-      eventIndexingBuffer.getIndices().sample = eventSample.getIndex();
 
-      // look for the bin index
-      LoaderUtils::fillBinIndex(eventIndexingBuffer, eventSample.getHistogram().getBinContextList());
+      bool hasValidBin{false};
+      for( auto& sampleIdx : sampleIdxList ) {
+        Sample& eventSample{*_cache_.samplesToFillList[sampleIdx]};
+        // look for the bin index
+        LoaderUtils::fillBinIndex(eventIndexingBuffer, eventSample.getHistogram().getBinContextList());
+        sampleBinIdxList.emplace_back(eventIndexingBuffer.getIndices().bin);
 
-      // No bin found -> next sample
-      if( eventIndexingBuffer.getIndices().bin == -1 ){
-        const int unbinnedEventThrottle = 5;
-        if( this->_unbinnedEvents_++ < unbinnedEventThrottle ){
-          LogAlert <<  "Selected event not in a likelihood histogram bin: "
-                     << std::endl
-                     << eventIndexingBuffer.getSummary()
-                     << std::endl;
-          if ( this->_unbinnedEvents_.getValue() == unbinnedEventThrottle ) {
-            LogAlert <<  "Further unbinned event warnings will be skipped."
-                     << std::endl;
+        // No bin found -> warning
+        if( sampleBinIdxList.back() == -1 ){
+          const int unbinnedEventThrottle = 5;
+          if( this->_unbinnedEvents_++ < unbinnedEventThrottle ){
+            LogAlert <<  "Selected event not in a likelihood histogram bin: "
+                       << std::endl
+                       << eventIndexingBuffer.getSummary()
+                       << std::endl;
+            if ( this->_unbinnedEvents_.getValue() == unbinnedEventThrottle ) {
+              LogAlert <<  "Further unbinned event warnings will be skipped."
+                       << std::endl;
+            }
           }
         }
-        continue;
+
+        sampleWeightList.emplace_back(1);
+        // dial collections may come with a condition formula
+        if( eventSample.getSampleWeightFormula() != nullptr ){
+          double sampleWeight = LoaderUtils::evalFormula(eventIndexingBuffer, eventSample.getSampleWeightFormula().get());
+          if( sampleWeight < 0 ) {
+            LogError << "Negative sampleWeight:" << sampleWeight << std::endl;
+            LogError << "sampleWeight buffer is: " << eventIndexingBuffer.getSummary() << std::endl;
+            LogExit("Negative sampleWeight");
+          }
+          sampleWeightList.back() *= sampleWeight;
+        }
+
+        hasValidBin = hasValidBin or ( sampleBinIdxList.back() != -1 and sampleWeightList.back() != 0 );
       }
 
-      // dial collections may come with a condition formula
-      if( eventSample.getSampleWeightFormula() != nullptr ){
-        double sampleWeight = LoaderUtils::evalFormula(eventIndexingBuffer, eventSample.getSampleWeightFormula().get());
-        if( sampleWeight == 0 ) {
-          // skip it
-          continue;
-        }
-        if( sampleWeight < 0 ) {
-          LogError << "Negative sampleWeight:" << sampleWeight << std::endl;
-          LogError << "sampleWeight buffer is: " << eventIndexingBuffer.getSummary() << std::endl;
-          LogExit("Negative sampleWeight");
-        }
-        eventIndexingBuffer.getWeights().base *= sampleWeight;
-      }
+      if( not hasValidBin ){ continue; }
+
+      // now we are sure the entry should be read till the end
 
       // dialIndexTreeFormula is modified by the TChain reader
       int dialCloneArrayIndex{0};
@@ -1332,117 +1346,128 @@ void DataDispenser::loadEvent(int iThread_){
         eventByEventDialBuffer[dialCollectionRef->getIndex()] = dial.release();
       }
 
-      if( _parameters_.debugNbMaxEventsToLoad != 0 ){
-        // check if the limit has been reached
-        std::unique_lock<std::mutex> lock(_mutex_);
-        if( _cache_.propagatorPtr->getEventDialCache().getFillIndex() >= _parameters_.debugNbMaxEventsToLoad ){
-          LogAlertIf(iThread_ == 0) << std::endl << std::endl; // flush pBar
-          LogAlertIf(iThread_ == 0) << "debugNbMaxEventsToLoad: Event number cap reached (";
-          LogAlertIf(iThread_ == 0) << _parameters_.debugNbMaxEventsToLoad << ")" << std::endl;
-          threadSharedData.isDoneReading.setValue( true );
-          return;
-        }
-      }
     }
 
     // ***** from this point, the TChain reader is released *****
 
-    // Let's claim an index. Indices are shared among threads
-    EventDialCache::IndexedCacheEntry *eventDialCacheEntry{nullptr};
-    {
-      std::unique_lock<std::mutex> lock(_mutex_);
-      eventDialCacheEntry = _cache_.propagatorPtr->getEventDialCache().fetchNextCacheEntry();
-      sampleEventIndex = _cache_.sampleIndexOffsetList[iSample]++;
-    }
+    for( int iSample = 0 ; iSample < int(sampleIdxList.size()) ; iSample++ ){
+      if( sampleBinIdxList[iSample] == -1 or sampleWeightList[iSample] == 0. ){ continue; }
 
-    // Get the next free event in our buffer
-    Event *eventPtr = &(*_cache_.sampleEventListPtrToFill[iSample])[sampleEventIndex];
+      // update for this specific sample
+      eventIndexingBuffer.getIndices().sample = _cache_.samplesToFillList[sampleIdxList[iSample]]->getIndex();
+      eventIndexingBuffer.getIndices().bin = sampleBinIdxList[iSample];
+      eventIndexingBuffer.getWeights().base *= sampleWeightList[iSample];
 
-    // copy from the event indexing buffer
-    LoaderUtils::copyData(eventIndexingBuffer, *eventPtr);
-
-    // Now the event is ready. Let's index the dials:
-    // there should always be a cache entry even if no dials are applied.
-    // This cache is actually used to write MC events with dials in output tree
-    eventDialCacheEntry->event.sampleIndex = std::size_t(eventIndexingBuffer.getIndices().sample);
-    eventDialCacheEntry->event.eventIndex = sampleEventIndex;
-
-    auto *dialEntryPtr = eventDialCacheEntry->dials.data();
-    for( auto *dialCollectionRef: _cache_.dialCollectionsRefList ){
-
-      // leave if event-by-event -> already loaded
-      if( not dialCollectionRef->getDialLeafName().empty() ){
-
-        // dialBase is valid -> store it
-        if( eventByEventDialBuffer[dialCollectionRef->getIndex()] != nullptr ){
-          size_t freeSlotDial = dialCollectionRef->getNextDialFreeSlot();
-          dialCollectionRef->getDialInterfaceList()[freeSlotDial].getDial().dialPtr
-            = std::unique_ptr<DialBase>(eventByEventDialBuffer[dialCollectionRef->getIndex()]);
-
-          dialEntryPtr->collectionIndex = dialCollectionRef->getIndex();
-          dialEntryPtr->interfaceIndex = freeSlotDial;
-          dialEntryPtr++;
-        }
-
-        continue; // skip the rest
+      // Let's claim an index. Indices are shared among threads
+      EventDialCache::IndexedCacheEntry *eventDialCacheEntry{nullptr};
+      {
+        std::unique_lock<std::mutex> lock(_mutex_);
+        eventDialCacheEntry = _cache_.propagatorPtr->getEventDialCache().fetchNextCacheEntry();
+        sampleEventIndex = _cache_.sampleIndexOffsetList[sampleIdxList[iSample]]++;
       }
 
-      // dial collections may come with a condition formula
-      if( dialCollectionRef->getApplyConditionFormula() != nullptr ){
-        if( LoaderUtils::evalFormula(eventIndexingBuffer, dialCollectionRef->getApplyConditionFormula().get()) == 0 ){
-          // next dialSet
-          continue;
+      // Get the next free event in our buffer
+      Event *eventPtr = &(*_cache_.sampleEventListPtrToFill[sampleIdxList[iSample]])[sampleEventIndex];
+
+      // copy from the event indexing buffer
+      LoaderUtils::copyData(eventIndexingBuffer, *eventPtr);
+
+      // Now the event is ready. Let's index the dials:
+      // there should always be a cache entry even if no dials are applied.
+      // This cache is actually used to write MC events with dials in output tree
+      eventDialCacheEntry->event.sampleIndex = std::size_t(eventIndexingBuffer.getIndices().sample);
+      eventDialCacheEntry->event.eventIndex = sampleEventIndex;
+
+      auto *dialEntryPtr = eventDialCacheEntry->dials.data();
+      for( auto *dialCollectionRef: _cache_.dialCollectionsRefList ){
+
+        // leave if event-by-event -> already loaded
+        if( not dialCollectionRef->getDialLeafName().empty() ){
+
+          // dialBase is valid -> store it
+          if( eventByEventDialBuffer[dialCollectionRef->getIndex()] != nullptr ){
+            size_t freeSlotDial = dialCollectionRef->getNextDialFreeSlot();
+            dialCollectionRef->getDialInterfaceList()[freeSlotDial].getDial().dialPtr
+              = std::unique_ptr<DialBase>(eventByEventDialBuffer[dialCollectionRef->getIndex()]);
+
+            dialEntryPtr->collectionIndex = dialCollectionRef->getIndex();
+            dialEntryPtr->interfaceIndex = freeSlotDial;
+            dialEntryPtr++;
+          }
+
+          continue; // skip the rest
         }
-      }
 
-      int iCollection = dialCollectionRef->getIndex();
-
-      if( dialCollectionRef->getDialType() == DialCollection::DialType::Tabulated
-          or dialCollectionRef->getDialType() == DialCollection::DialType::Kriged ) {
-        // Event-by-event dial with a factory.
-
-        std::unique_ptr<DialBase> dialBase(
-            dialCollectionRef->getCollectionData<DialFactoryBase>(0)
-                ->makeDial(eventIndexingBuffer));
-
-        // dialBase is valid -> store it
-        if( dialBase != nullptr ){
-          size_t freeSlotDial = dialCollectionRef->getNextDialFreeSlot();
-          dialCollectionRef->getDialInterfaceList()[freeSlotDial].getDial().dialPtr =
-            std::unique_ptr<DialBase>(dialBase.release());
-
-          dialEntryPtr->collectionIndex = iCollection;
-          dialEntryPtr->interfaceIndex = freeSlotDial;
-          dialEntryPtr++;
+        // dial collections may come with a condition formula
+        if( dialCollectionRef->getApplyConditionFormula() != nullptr ){
+          if( LoaderUtils::evalFormula(eventIndexingBuffer, dialCollectionRef->getApplyConditionFormula().get()) == 0 ){
+            // next dialSet
+            continue;
+          }
         }
-      }
-      else{
 
-        if( dialCollectionRef->getDialInterfaceList().size() == 1
-            and dialCollectionRef->getDialBinSet().getBinList().empty()){
-          // There isn't any binning, and there is only one dial.
-          // In this case we don't need to check if the dial is in
-          // a bin.
-          dialEntryPtr->collectionIndex = iCollection;
-          dialEntryPtr->interfaceIndex = 0;
-          dialEntryPtr++;
-        }
-        else{
-          // There are multiple dials, or there is a list of bins
-          // to apply the dial to.  Check if the event falls into
-          // a bin, and apply the correct binning.  Some events
-          // may not be in any bin.
-          auto dialBinIdx = eventIndexingBuffer.getVariables().findBinIndex(
-              dialCollectionRef->getDialBinSet().getBinList());
-          if( dialBinIdx != -1 ){
+        int iCollection = dialCollectionRef->getIndex();
+
+        if( dialCollectionRef->getDialType() == DialCollection::DialType::Tabulated
+            or dialCollectionRef->getDialType() == DialCollection::DialType::Kriged ) {
+          // Event-by-event dial with a factory.
+
+          std::unique_ptr<DialBase> dialBase(
+              dialCollectionRef->getCollectionData<DialFactoryBase>(0)
+                  ->makeDial(eventIndexingBuffer));
+
+          // dialBase is valid -> store it
+          if( dialBase != nullptr ){
+            size_t freeSlotDial = dialCollectionRef->getNextDialFreeSlot();
+            dialCollectionRef->getDialInterfaceList()[freeSlotDial].getDial().dialPtr =
+              std::unique_ptr<DialBase>(dialBase.release());
+
             dialEntryPtr->collectionIndex = iCollection;
-            dialEntryPtr->interfaceIndex = dialBinIdx;
+            dialEntryPtr->interfaceIndex = freeSlotDial;
             dialEntryPtr++;
           }
         }
-      }
+        else{
 
-    } // dial collection loop
+          if( dialCollectionRef->getDialInterfaceList().size() == 1
+              and dialCollectionRef->getDialBinSet().getBinList().empty()){
+            // There isn't any binning, and there is only one dial.
+            // In this case we don't need to check if the dial is in
+            // a bin.
+            dialEntryPtr->collectionIndex = iCollection;
+            dialEntryPtr->interfaceIndex = 0;
+            dialEntryPtr++;
+          }
+          else{
+            // There are multiple dials, or there is a list of bins
+            // to apply the dial to.  Check if the event falls into
+            // a bin, and apply the correct binning.  Some events
+            // may not be in any bin.
+            auto dialBinIdx = eventIndexingBuffer.getVariables().findBinIndex(
+                dialCollectionRef->getDialBinSet().getBinList());
+            if( dialBinIdx != -1 ){
+              dialEntryPtr->collectionIndex = iCollection;
+              dialEntryPtr->interfaceIndex = dialBinIdx;
+              dialEntryPtr++;
+            }
+          }
+        }
+
+      } // dial collection loop
+
+    }
+
+    if( _parameters_.debugNbMaxEventsToLoad != 0 ){
+      // check if the limit has been reached
+      std::unique_lock<std::mutex> lock(_mutex_);
+      if( _cache_.propagatorPtr->getEventDialCache().getFillIndex() >= _parameters_.debugNbMaxEventsToLoad ){
+        LogAlertIf(iThread_ == 0) << std::endl << std::endl; // flush pBar
+        LogAlertIf(iThread_ == 0) << "debugNbMaxEventsToLoad: Event number cap reached (";
+        LogAlertIf(iThread_ == 0) << _parameters_.debugNbMaxEventsToLoad << ")" << std::endl;
+        threadSharedData.isDoneReading.setValue( true );
+        return;
+      }
+    }
 
   } // while ok
 
