@@ -304,8 +304,8 @@ void DataDispenser::doEventSelection(){
   _cache_.threadSelectionResults.resize(nThreads);
   for( auto& threadResults : _cache_.threadSelectionResults ){
     threadResults.sampleNbOfEvents.resize(_cache_.samplesToFillList.size(), 0);
-    threadResults.entrySampleIndexList.resize(nEntries);
-    for (auto& sampleIdxList : threadResults.entrySampleIndexList){ sampleIdxList.clear(); sampleIdxList.reserve(1); }
+    threadResults.entrySampleIndexList.reserve(nEntries);
+    // for (auto& sampleIdxList : threadResults.entrySampleIndexList){ sampleIdxList.clear(); sampleIdxList.reserve(1); }
   }
 
   if( not _owner_->isDevSingleThreadEventSelection() ) {
@@ -323,8 +323,8 @@ void DataDispenser::doEventSelection(){
   _cache_.sampleNbOfEvents.resize(_cache_.samplesToFillList.size(), 0);
 
   // get minimum overhead with low capacity
-  _cache_.entrySampleIndexList.resize(nEntries);
-  for (auto& sampleIdxList : _cache_.entrySampleIndexList){ sampleIdxList.clear(); sampleIdxList.reserve(1); }
+  // _cache_.entrySampleIndexList.reserve(nEntries);
+  // for (auto& sampleIdxList : _cache_.entrySampleIndexList){ sampleIdxList.clear(); sampleIdxList.reserve(1); }
 
   for( auto& threadResults : _cache_.threadSelectionResults ){
     // merging nEvents
@@ -333,11 +333,7 @@ void DataDispenser::doEventSelection(){
       _cache_.sampleNbOfEvents[iSample] += threadResults.sampleNbOfEvents[iSample];
     }
 
-    for( size_t iEntry = 0 ; iEntry < int(_cache_.entrySampleIndexList.size()) ; iEntry++ ){
-      if( not threadResults.entrySampleIndexList[iEntry].empty() ){
-        _cache_.entrySampleIndexList[iEntry] = threadResults.entrySampleIndexList[iEntry];
-      }
-    }
+    _cache_.entrySampleIndexList.append_move(std::move(threadResults.entrySampleIndexList));
 
   }
 
@@ -863,6 +859,7 @@ void DataDispenser::eventSelectionFunction(int iThread_){
   auto& threadSelectionResults = _cache_.threadSelectionResults[iThread_];
 
   for ( Long64_t iEntry = bounds.beginIndex ; iEntry < bounds.endIndex ; iEntry++ ) {
+    auto row = threadSelectionResults.entrySampleIndexList.emplace_back();
     if( iThread_ == 0 ){
       readSpeed.addQuantity(treeChain->GetEntry(iEntry)*nThreads);
       if (GenericToolbox::showProgressBar(iGlobal, nEvents)) {
@@ -896,7 +893,6 @@ void DataDispenser::eventSelectionFunction(int iThread_){
     bool sampleHasBeenFound{false};
     for( auto& sampleCut : sampleCutList ){
 
-
       if(  sampleCut.cutIndex == -1  // no cut?
            or tb.getExpressionBufferList()[sampleCut.cutIndex]->getBuffer().getValueAsDouble() != 0 // pass cut?
           ){
@@ -905,7 +901,7 @@ void DataDispenser::eventSelectionFunction(int iThread_){
           LogExit("Multi-sample event isn't enabled. By default, `allowMultipleSamplesPerEntry: false` by default.");
         }
         sampleHasBeenFound = true;
-        threadSelectionResults.entrySampleIndexList[iEntry].emplace_back(sampleCut.sampleIndex);
+        row.emplace_back(sampleCut.sampleIndex);
         threadSelectionResults.sampleNbOfEvents[sampleCut.sampleIndex]++;
       }
       else{
@@ -1207,7 +1203,7 @@ void DataDispenser::loadEvent(int iThread_){
   };
 
   std::unordered_map<int, const TObject**> dialAddressMap;
-  std::vector<int> sampleIdxList;
+  // std::vector<int> sampleIdxList;
   std::vector<int> sampleBinIdxList;
   std::vector<double> sampleWeightList;
 
@@ -1259,7 +1255,7 @@ void DataDispenser::loadEvent(int iThread_){
       eventIndexingBuffer.getIndices().treeEntry = threadSharedData.treeChain->GetTree()->GetReadEntry();
 
       // get sample index / all -1 samples have been ruled out by the chain reader
-      sampleIdxList = _cache_.entrySampleIndexList[eventIndexingBuffer.getIndices().entry];
+      const auto& sampleIdxList = _cache_.entrySampleIndexList[eventIndexingBuffer.getIndices().entry];
       sampleBinIdxList.clear(); sampleBinIdxList.reserve(sampleIdxList.size());
       sampleWeightList.clear(); sampleWeightList.reserve(sampleIdxList.size());
 
@@ -1350,6 +1346,7 @@ void DataDispenser::loadEvent(int iThread_){
 
     // ***** from this point, the TChain reader is released *****
 
+    const auto& sampleIdxList = _cache_.entrySampleIndexList[eventIndexingBuffer.getIndices().entry];
     for( int iSample = 0 ; iSample < int(sampleIdxList.size()) ; iSample++ ){
       if( sampleBinIdxList[iSample] == -1 or sampleWeightList[iSample] == 0. ){ continue; }
 
