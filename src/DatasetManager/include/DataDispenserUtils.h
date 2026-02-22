@@ -24,6 +24,7 @@ struct DataDispenserParameters{
   // should be load dials and request the associate variables?
   bool useReweightEngine{false};
   bool isData{false}; // shall fetch slpit vars?
+  bool allowMultipleSamplesPerEntry{false};
   size_t debugNbMaxEventsToLoad{0};
   double fractionOfEntries{1.};
 
@@ -82,7 +83,7 @@ struct DataDispenserCache{
 
   std::vector<Sample*> samplesToFillList{};
   std::vector<size_t> sampleNbOfEvents;
-  std::vector<int> entrySampleIndexList{};
+  GenericToolbox::CSRVector<int> entrySampleIndexList{};
   std::vector<size_t> sampleIndexOffsetList;
   std::vector< std::vector<Event>* > sampleEventListPtrToFill;
   std::vector<DialCollection*> dialCollectionsRefList{};
@@ -94,7 +95,7 @@ struct DataDispenserCache{
 
   struct ThreadSelectionResult{
     std::vector<size_t> sampleNbOfEvents;
-    std::vector<int> entrySampleIndexList;
+    GenericToolbox::CSRVector<int> entrySampleIndexList;
   };
   std::vector<ThreadSelectionResult> threadSelectionResults;
 
