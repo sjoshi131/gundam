@@ -186,9 +186,8 @@ namespace DialUtils{
       double m{splinePointList_[i].slope};
       double p{splinePointList_[i].slope};
 
-      if( i >= 1 ) { m = getSlope(splinePointList_[i - 1], splinePointList_[i]); }
-      if( i < nPoints - 1 ) { p = getSlope(splinePointList_[i], splinePointList_[i + 1]); }
-
+      if( i >= 1 )         { m = getSlope(splinePointList_[i - 1], splinePointList_[i]); }
+      if( i < nPoints - 1 ){ p = getSlope(splinePointList_[i], splinePointList_[i + 1]); }
 
       double delta = std::min(std::abs(m), std::abs(p));
       // Make sure the slope at a cusp (where the average slope
