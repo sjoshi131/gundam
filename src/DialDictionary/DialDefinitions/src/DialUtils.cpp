@@ -197,8 +197,8 @@ namespace DialUtils{
       // It's not the actual value where the spline becomes
       // non-monotonic.
       if( std::abs(splinePointList_[i].slope) > 3.0 * delta ) {
-        splinePointList_[i].slope = 3.0 * delta;
-        if( splinePointList_[i].slope < 0.0 ) { splinePointList_[i].slope *= -1; }
+        if(splinePointList_[i].slope < 0){ splinePointList_[i].slope = - 3.0 * delta; }
+        else{ splinePointList_[i].slope = 3.0 * delta; }
       }
     }
   }

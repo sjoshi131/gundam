@@ -1159,11 +1159,6 @@ std::unique_ptr<DialBase> DialCollection::makeSplineDial(const TObject* src_) co
       ////////////////////////////////////////////////////////////////
       if( isMonotonic ) {
         DialUtils::applyMonotonicCondition(splinePointList);
-        LogError << std::endl << std::endl << std::endl << std::endl;
-        for( auto& point : splinePointList ) {
-          LogError << "X: " << point.x << " Y: " << point.y << " S: " << point.slope << std::endl;
-        }
-        LogThrow("splinePointList");
       }
 
       if( DialUtils::isUniform(splinePointList, uniformityTolerance) ){
