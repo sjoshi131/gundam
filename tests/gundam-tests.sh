@@ -238,6 +238,8 @@ for d in ${TESTS}; do
             # The job exited with success, but look for a fail messsage
             if (tail -5 ${OUTPUT_DIR}/${LOG} | grep FAIL >> /dev/null); then
                 echo JOB FAILURE: ${i}
+            elif (tail -10 ${OUTPUT_DIR}/${LOG} | grep "Execution.*aborted" >> /dev/null); then
+                echo JOB FAILURE: ${i}
             else
                 echo JOB SUCCESS: ${i}
                 SUCCESS="yes"
