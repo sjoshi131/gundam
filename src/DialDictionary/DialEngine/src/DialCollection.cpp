@@ -1057,7 +1057,6 @@ std::unique_ptr<DialBase> DialCollection::makeSplineDial(const TObject* src_) co
   }
   if( _dialOptions_.find("ROOT") != std::string::npos) splType = "ROOT";
 
-  bool isMonotonic = ( _dialOptions_.find("monotonic") != std::string::npos );
 
   // Get the numeric tolerance for when a uniform spline can be used.  We
   // should be able to set this in the DialSubType.
@@ -1086,12 +1085,6 @@ std::unique_ptr<DialBase> DialCollection::makeSplineDial(const TObject* src_) co
     return out;
   }
 
-  // If there are only two points, then force a catmull-rom.  This could be
-  // handled using a graph, but Catmull-Rom is fast, and works better with the
-  // GPU.  The isMonotonic is forced to false so that this uses CompactSpline
-  // instead of MonotonicSpline.
-  if( splinePointList.size() <= 2 ){ splType = "catmull-rom"; isMonotonic = false; }
-
   ////////////////////////////////////////////////////////////////
   // Check if the spline slope calculation should be updated.  The slopes for
   // not-a-knot and natural splines are calculated by FillFromGraph and
@@ -1099,14 +1092,6 @@ std::unique_ptr<DialBase> DialCollection::makeSplineDial(const TObject* src_) co
   // slopes for the other types ("catmull-rom", "akima")
   if     ( splType == "catmull-rom" ){ DialUtils::fillCatmullRomSlopes(splinePointList); }
   else if( splType == "akima" ){ DialUtils::fillAkimaSlopes(splinePointList); }
-
-  ////////////////////////////////////////////////////////////////
-  // Check if the spline is supposed to be monotonic and condition the slopes
-  // if necessary.  This is ignored by "ROOT" splines.  The Catmull-Rom
-  // splines have a special implementation for monotonic splines, so save a
-  // flag that can be checked later.
-  ////////////////////////////////////////////////////////////////
-  if( isMonotonic ){ DialUtils::applyMonotonicCondition(splinePointList); }
 
   ///////////////////////////////////////////////////////////
   // Create the right kind low level spline class base on all of the previous
@@ -1121,53 +1106,78 @@ std::unique_ptr<DialBase> DialCollection::makeSplineDial(const TObject* src_) co
     rootSpline->buildDial(splinePointList);
     out = std::move(rootSpline);
   }
-  else if( splType == "catmull-rom" ){
-    // Catmull-Rom is handled as a special case because it ignores the slopes,
-    // and has an explicit monotonic implementatino.  It also must have
-    // uniformly spaced knots.
-    if( not DialUtils::isUniform(splinePointList, uniformityTolerance) ){
-      LogError << "Catmull-rom splines need a uniformly spaced points"
-               << " Dial: " << getTitle()
-               << std::endl;
-      double step = (splinePointList.back().x-splinePointList.front().x)/(static_cast<double>(splinePointList.size())-1.);
-      for (int i = 0; i<splinePointList.size()-1; ++i) {
-        LogError << i << " --  X: " << splinePointList[i].x
-                 << " X+1: " << splinePointList[i+1].x
-                 << " step: " << step
-                 << " error: " << splinePointList[i+1].x - splinePointList[i].x - step
-                 << std::endl;
-      }
-      // If the user specified a tolerance then crash, otherwise trust the
-      // user knows that it's not uniform and continue.
-      LogThrowIf(uniformityTolerance != defUniformityTolerance, "Invalid catmull-rom inputs -- Nonuniform spacing");
-    }
-
-    if( isMonotonic ) {
-      auto monotonicSpline = std::make_unique<MonotonicSpline>();
-      monotonicSpline->buildDial(splinePointList);
-      out = std::move(monotonicSpline);
-    }
-    else {
-      auto compactSpline = std::make_unique<CompactSpline>();
-      compactSpline->buildDial(splinePointList);
-      out = std::move(compactSpline);
-    }
-
-  }
-  else if( DialUtils::isUniform(splinePointList, uniformityTolerance) ){
-    // Haven't matched a specific special case, but we have uniformly spaced
-    // knots so we can use the faster UniformSpline implementation.
-    auto uniformSpline = std::make_unique<UniformSpline>();
-    uniformSpline->buildDial(splinePointList);
-    out = std::move(uniformSpline);
-  }
   else {
-    // Haven't matched a specific special case, and the knots are not
-    // uniformly spaced, so we have to use the GeneralSpline implemenatation
-    // which can handle any kind of cubic spline.
-    auto generalSpline = std::make_unique<GeneralSpline>();
-    generalSpline->buildDial(splinePointList);
-    out = std::move(generalSpline);
+
+    bool isMonotonic = ( _dialOptions_.find("monotonic") != std::string::npos );
+
+    // If there are only two points, then force a catmull-rom.  This could be
+    // handled using a graph, but Catmull-Rom is fast, and works better with the
+    // GPU.  The isMonotonic is forced to false so that this uses CompactSpline
+    // instead of MonotonicSpline.
+    // NOTE: THIS SHOULD NOT HAPPEN -> <= 2 points graphs should be intercepted before
+    if( splinePointList.size() <= 2 ){ splType = "catmull-rom"; isMonotonic = false; }
+
+    if( splType == "catmull-rom" ){
+      // Catmull-Rom is handled as a special case because it ignores the slopes,
+      // and has an explicit monotonic implementatino.  It also must have
+      // uniformly spaced knots.
+      if( not DialUtils::isUniform(splinePointList, uniformityTolerance) ){
+        LogError << "Catmull-rom splines need a uniformly spaced points"
+                 << " Dial: " << getTitle()
+                 << std::endl;
+        double step = (splinePointList.back().x-splinePointList.front().x)/(static_cast<double>(splinePointList.size())-1.);
+        for (int i = 0; i<splinePointList.size()-1; ++i) {
+          LogError << i << " --  X: " << splinePointList[i].x
+                   << " X+1: " << splinePointList[i+1].x
+                   << " step: " << step
+                   << " error: " << splinePointList[i+1].x - splinePointList[i].x - step
+                   << std::endl;
+        }
+        // If the user specified a tolerance then crash, otherwise trust the
+        // user knows that it's not uniform and continue.
+        LogThrowIf(uniformityTolerance != defUniformityTolerance, "Invalid catmull-rom inputs -- Nonuniform spacing");
+      }
+
+      if( isMonotonic ) {
+        // MonotonicSpline class is CATMULL-ROM with MONOTONIC option -> TODO: make that explicit in the class name
+        auto monotonicSpline = std::make_unique<MonotonicSpline>();
+        monotonicSpline->buildDial(splinePointList);
+        out = std::move(monotonicSpline);
+      }
+      else {
+        auto compactSpline = std::make_unique<CompactSpline>();
+        compactSpline->buildDial(splinePointList);
+        out = std::move(compactSpline);
+      }
+    }
+    else{
+      ////////////////////////////////////////////////////////////////
+      // Check if the spline is supposed to be monotonic and condition the slopes
+      // if necessary.  The Catmull-Rom
+      // splines have a special implementation for monotonic splines, so save a
+      // flag that can be checked later.
+      ////////////////////////////////////////////////////////////////
+      if( isMonotonic ) {
+        DialUtils::applyMonotonicCondition(splinePointList);
+      }
+
+      if( DialUtils::isUniform(splinePointList, uniformityTolerance) ){
+        // Haven't matched a specific special case, but we have uniformly spaced
+        // knots so we can use the faster UniformSpline implementation.
+        auto uniformSpline = std::make_unique<UniformSpline>();
+        uniformSpline->buildDial(splinePointList);
+        out = std::move(uniformSpline);
+      }
+      else {
+        // Haven't matched a specific special case, and the knots are not
+        // uniformly spaced, so we have to use the GeneralSpline implemenatation
+        // which can handle any kind of cubic spline.
+        auto generalSpline = std::make_unique<GeneralSpline>();
+        generalSpline->buildDial(splinePointList);
+        out = std::move(generalSpline);
+      }
+    }
+
   }
 
   // Pass the ownership without any constraints!
