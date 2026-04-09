@@ -205,7 +205,6 @@ TEST(GeneralSpline,CatmullRomFritz) {
         int count = 10;
         for (int j = 0; j<count; ++j) {
             double y = myRand(seed);
-            std::cout << " " << seed << " " << x << " " << y << std::endl;
             graph.SetPoint(j,x, y);
             x += myRand(seed)+0.5;
         }
@@ -221,7 +220,6 @@ TEST(GeneralSpline,TSpline3Fritz) {
         int count = 10;
         for (int j = 0; j<count; ++j) {
             double y = myRand(seed);
-            std::cout << "spline4 " << seed << " " << x << " " << y << std::endl;
             graph.SetPoint(j,x, y);
             x += myRand(seed)+0.5;
         }
