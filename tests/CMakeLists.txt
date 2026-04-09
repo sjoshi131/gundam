@@ -50,6 +50,7 @@ if( WITH_GOOGLE_TEST )
       GTests/unitTest_CalculateUniformSpline.cpp
       GTests/unitTest_CalculateBilinearInterpolation.cpp
       GTests/unitTest_CalculateBicubicSpline.cpp
+      GTests/unitTest_ApplyMonotonicCondition.cpp
     )
     target_link_libraries(gundamGTest_unitTest.exe GTest::gtest_main)
     target_link_libraries(gundamGTest_unitTest.exe GundamFitter)
