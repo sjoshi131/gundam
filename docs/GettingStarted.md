@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Getting started 
-next_page: "usage.md"
+next_page: "usage.html"
 ---
 
 # Installation instructions
