@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Introduction 
-next_page: "https://ulyevarou.github.io/GUNDAM-documentation/GettingStarted.html"
+next_page: "https://github.com/gundam-organization/gundam/blob/main/docs/GettingStarted.md"
 ---
 # Overview of the software
 GUNDAM, standing for *Generalized and Unified Neutrino Data Analysis Methods*,
