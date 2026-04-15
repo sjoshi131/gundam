@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Introduction 
-next_page: "https://github.com/gundam-organization/gundam/blob/main/docs/GettingStarted.md"
+next_page: "GettingStarted.html"
 ---
 # Overview of the software
 GUNDAM, standing for *Generalized and Unified Neutrino Data Analysis Methods*,
