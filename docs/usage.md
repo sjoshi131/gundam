@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Run GUNDAM
-next_page: "https://github.com/gundam-organization/gundam/blob/main/docs/forDevelopers.md"
+next_page: "forDevelopers.html"
 ---
 
 # Overview
