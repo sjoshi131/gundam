@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Development policy 
-next_page: "https://github.com/gundam-organization/gundam/blob/main/docs/faq.md"
+next_page: "faq.html"
 ---
 
 # Editing the code
