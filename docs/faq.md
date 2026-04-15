@@ -1,7 +1,7 @@
 ---
 layout: default
 title: FAQs 
-next_page: "https://ulyevarou.github.io/GUNDAM-documentation/LineageandLegacy.html"
+next_page: "https://github.com/gundam-organization/gundam/blob/main/docs/LineageandLegacy.md"
 ---
 
 <details>
