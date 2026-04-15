@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Getting started 
-next_page: "https://github.com/gundam-organization/gundam/blob/main/docs/usage.md"
+next_page: "usage.md"
 ---
 
 # Installation instructions
