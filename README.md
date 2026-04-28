@@ -46,7 +46,7 @@ GUNDAM [User Documentation](https://gundam-organization.github.io/gundam/) is gr
 ## Cloning and updating GUNDAM
 
 GUNDAM source code is officially available under the
-[GUNDAM-organization on GitHub](https://github.com/gundam-organization/gundam).
+[GUNDAM-organization on GitHub](https://sjoshi131.github.io/gundam/).
 To copy the code on your computer or cluster, we recommend to use GIT.
 
 ```bash
