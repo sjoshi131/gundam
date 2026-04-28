@@ -27,7 +27,7 @@ debugging benefit all analyses.
 
 ## Documentation
 
-GUNDAM [User Documentation](https://gundam-organization.github.io/gundam/) is growing daily.  You can also find examples and other interesting materials under the [resources/](resources/) hierarchy in this repository.  All of the web documentation is available in the source tree under the [docs/](docs/) hierarcy in this repository (see the [index](docs/index.md).)
+GUNDAM [User Documentation](https://sjoshi131.github.io/gundam/) is growing daily.  You can also find examples and other interesting materials under the [resources/](resources/) hierarchy in this repository.  All of the web documentation is available in the source tree under the [docs/](docs/) hierarcy in this repository (see the [index](docs/index.md).)
 
 ![Dependencies banner](resources/images/README/sections/sections.001.png)
 
