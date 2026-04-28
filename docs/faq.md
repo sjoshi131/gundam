@@ -5,22 +5,22 @@ next_page: "LineageandLegacy.html"
 ---
 
 <style>
-details {
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  padding: 10px;
-  margin-bottom: 10px;
-  background: #f9f9f9;
-}
-
-summary {
-  font-weight: bold;
+.accordion {
+  background: #f1f1f1;
   cursor: pointer;
-  font-size: 16px;
+  padding: 12px;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-weight: bold;
+  margin-top: 5px;
 }
 
-details[open] {
-  background: #eef6ff;
+.panel {
+  display: none;
+  padding: 10px;
+  background: white;
+  border: 1px solid #ddd;
 }
 </style>
 
