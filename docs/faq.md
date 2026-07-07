@@ -78,7 +78,7 @@ next_page: "LineageandLegacy.html"
   </p>
 </div>
 
-<button class="accordion">How does Gundam handle spline extrapolation???</button>
+<button class="accordion">How does Gundam handle spline extrapolation???!!!!!</button>
 <div class="panel">
   <p>
     Gundam features multiple spline interpolation methods, and they have different
