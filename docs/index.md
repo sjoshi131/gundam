@@ -6,6 +6,7 @@ title: GUNDAM
 # Welcome to GUNDAM User Guide
 
 - [Introduction](introduction.md)
+- [User Documentation](UserDocs.md)
 - [How to install](GettingStarted.md)
 - [Run GUNDAM](usage.md)
 - [Configuration File Reference](configuration/TopLevel.md)
