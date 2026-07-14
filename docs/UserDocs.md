@@ -22,3 +22,5 @@ and debugging for every project at once.
 
 - [Core Architecture](Documentation/CoreArchitecture.md)
 - [Dial System](Documentation/DialSystem.md)
+- [Statistical Inference](Documentation/StatisticalInference.md)
+- [Applications](Documentation/Applications.md)
