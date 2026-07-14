@@ -18,7 +18,7 @@ When the fitter or sampler changes parameter values, the Propagator updates the 
 
 After the Propagator updates the prediction histograms, those histograms are passed to the Likelihood Interface and compared with data. The resulting likelihood value is then used by the fitter or sampler to continue the fit.
 
-## Parameters Manager
+### Parameters Manager
 
 The Parameters Manager defines and organizes the quantities that can vary during the fit. GUNDAM does not assign a fixed physical meaning to these parameters. Depending on the analysis, they may represent normalization factors, oscillation parameters, or systematic effects associated with the neutrino flux, interaction cross sections, and detector response. Other model parameters can also be included when they are defined and connected to the prediction in the analysis configuration.
 
@@ -28,7 +28,7 @@ The Parameters Manager provides the current parameter values used by the fit. Wh
 
 A clear parameter configuration is important because it defines the parameter space explored by the fit. The choice of prior values, parameter limits, fixed states, and covariance constraints can affect fit stability, uncertainty estimation, and the physical interpretation of the result.
 
-## Sample and Event Management
+### Sample and Event Management
 
 Sample and Event Management defines how loaded events are organized into analysis samples. A sample usually corresponds to an analysis channel, such as a beam mode, flavor category, event topology, signal region, background region, or control sample.
 
@@ -38,7 +38,7 @@ This stage connects the input datasets to the physics categories used in the ana
 
 During the fit, Monte Carlo events remain associated with their configured samples. When parameter values change, the affected event weights or systematic responses are updated, and the corresponding sample histograms are rebuilt. Therefore, sample definitions directly control which distributions enter the likelihood calculation.
 
-## Dataset Loading
+### Dataset Loading
 
 Dataset Loading defines where the input events come from and how GUNDAM should read them. In most analyses, the events are stored in ROOT TTrees or TChains. The dataset configuration specifies the input ROOT files, the tree name, the nominal event weight, and the variables or branch mappings needed later for selections, weights, binning, and systematic variations.
 
