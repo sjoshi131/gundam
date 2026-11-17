@@ -2,6 +2,14 @@
 // Created by Adrien Blanchet on 29/11/2022.
 //
 
+/// @file DialCollection.cpp
+/// @brief Implements DialCollection: reads a dial-set definition, builds its
+///        dials and links them to their input buffers.
+/// @ingroup DialDictionary
+///
+/// The public contract of each method is documented in DialCollection.h. The
+/// comments here describe how each method does its job.
+
 #include "DialCollection.h"
 
 #include "TabulatedDialFactory.h"
@@ -28,6 +36,11 @@
 
 #include <sstream>
 
+/// @par Implementation
+/// Clears any earlier declarations, so the reader ends up with exactly the
+/// keys listed here, declares every key with its alternative names, then runs
+/// ConfigReader::checkConfiguration(). `parameterLimits` is declared only so
+/// that the check can flag it as deprecated.
 void DialCollection::prepareConfig(ConfigReader &config_){
   config_.clearFields();
   config_.defineFields({
@@ -60,11 +73,21 @@ void DialCollection::prepareConfig(ConfigReader &config_){
     });
   config_.checkConfiguration();
 }
+/// @par Implementation
+/// The order of the two builders matters: a definition with
+/// `parametersBinningPath` always gives binned normalisation dials, whatever
+/// its other keys. The `dialInputList` block runs after the dials are built
+/// and even if no builder applied. It creates a single DialInputBuffer, so
+/// setupDialInterfaceReferences() later skips its automatic buffer setup and
+/// connects every dial to this buffer. Only the `name` key of each list
+/// entry is read; an entry without `name` keeps parameter index -1, which
+/// DialInputBuffer::initialise() rejects during initialize().
 void DialCollection::configureImpl() {
   prepareConfig(_config_);
 
   _config_.fillValue(_dataSetNameList_, "applyOnDataSets");
   _config_.fillValue(_isEnabled_, "isEnabled");
+  // A disabled definition leaves the collection empty: no dial, no buffer.
   if( not _isEnabled_ ){ return; }
 
   // Dials are directly defined with a binning file?
@@ -86,7 +109,7 @@ void DialCollection::configureImpl() {
 
     // add the ref of each selected parameter
     for( auto& dialInput : dialInputList.getConfig() ){
-      DialInputBuffer::ParameterReference p;
+      DialInputBuffer::ParameterReference p; // the parameter this entry reads
       p.parSetIndex = _supervisedParameterSetIndex_;
 
       if( GenericToolbox::Json::doKeyExist(dialInput, "name") ){
@@ -102,12 +125,21 @@ void DialCollection::configureImpl() {
   }
 
 }
+/// @par Implementation
+/// Checks that the index was set, then delegates to
+/// setupDialInterfaceReferences(). Event-by-event collections hold no dial
+/// yet at this point; their interfaces are linked again by
+/// resizeContainers() once the data is loaded.
 void DialCollection::initializeImpl() {
   LogThrowIf(_index_==-1, "Index not set.");
   this->setupDialInterfaceReferences();
 }
 
 // non-trivial getters
+/// @par Implementation
+/// Lower-cases the dataset name and each pattern, then uses
+/// GenericToolbox::isMatching(), which turns `*` into a regex wildcard and
+/// escapes the other regex characters.
 bool DialCollection::isDatasetValid(const std::string& datasetName_) const{
   if( _dataSetNameList_.empty() ){ return true; }
 
@@ -118,6 +150,9 @@ bool DialCollection::isDatasetValid(const std::string& datasetName_) const{
   return matching;
 }
 
+/// @par Implementation
+/// Tries the supervised parameter first, then the supervised set, so a
+/// per-parameter collection is named after its parameter.
 std::string DialCollection::getTitle() const {
 
   auto* parPtr{this->getSupervisedParameter()};
@@ -128,8 +163,13 @@ std::string DialCollection::getTitle() const {
 
   return {"UnsetParameterSuperVision"};
 }
+/// @par Implementation
+/// Appends each part only when it carries information (type not Unset,
+/// non-empty strings, ranges with a bound). The event-by-event test sits
+/// inside the dial loop, so for those collections the loop runs but prints
+/// nothing.
 std::string DialCollection::getSummary(bool shallow_) const{
-  std::stringstream ss;
+  std::stringstream ss; // the summary being built
   ss << "DialCollection: ";
   ss << this->getTitle();
   if( _dialType_ != DialType::Unset ){ ss << " / " << _dialType_; }
@@ -150,6 +190,12 @@ std::string DialCollection::getSummary(bool shallow_) const{
   return ss.str();
 }
 
+/// @par Implementation
+/// Returns nullptr when the set is missing or the parameter index is
+/// negative.
+/// @note The upper bound test uses `>` instead of `>=`: an index equal to
+///       the number of parameters passes it, and `.at()` then throws
+///       std::out_of_range instead of the function returning nullptr.
 Parameter* DialCollection::getSupervisedParameter() const {
   auto* parSetPtr = this->getSupervisedParameterSet();
   if( parSetPtr == nullptr ) return nullptr;
@@ -158,6 +204,12 @@ Parameter* DialCollection::getSupervisedParameter() const {
   return &parSetPtr->getParameterList().at(_supervisedParameterIndex_);
 }
 
+/// @par Implementation
+/// Returns nullptr when the set index is negative. `_parameterSetListPtr_`
+/// is used without a null check.
+/// @note As in getSupervisedParameter(), the upper bound test uses `>`: an
+///       index equal to the list size makes `.at()` throw
+///       std::out_of_range.
 ParameterSet* DialCollection::getSupervisedParameterSet() const{
   if( _supervisedParameterSetIndex_ < 0 ) return nullptr;
   if( _supervisedParameterSetIndex_ > _parameterSetListPtr_->size() ) return nullptr;
@@ -165,12 +217,20 @@ ParameterSet* DialCollection::getSupervisedParameterSet() const{
 }
 
 // core
+/// @par Implementation
+/// `shrink_to_fit()` releases the memory of the interface list, which can
+/// be large for event-by-event collections (one entry per event).
 void DialCollection::clear(){
   _dialInterfaceList_.clear();
   _dialInterfaceList_.shrink_to_fit();
   _dialFreeSlot_.setValue(0);
 }
 
+/// @par Implementation
+/// Slots are handed out from 0 upwards, so the first `_dialFreeSlot_`
+/// entries are exactly the filled ones and a plain resize keeps them all.
+/// The interfaces added by DataDispenser have no buffer or supervisor
+/// pointer yet, which is why setupDialInterfaceReferences() runs again.
 void DialCollection::resizeContainers(){
   LogDebugIf(GundamGlobals::isDebug()) << "Resizing containers of the dial collection \"" << this->getTitle() << "\" from "
                                        << _dialInterfaceList_.size() << " to " << _dialFreeSlot_.getValue() << std::endl;
@@ -180,10 +240,26 @@ void DialCollection::resizeContainers(){
   this->setupDialInterfaceReferences();
 }
 
+/// @par Implementation
+/// A plain loop on the calling thread. A collection has at most one buffer
+/// per parameter of its supervised set, so the loop is short.
 void DialCollection::updateInputBuffers(){
   for( auto& inputBuffer : _dialInputBufferList_ ){ inputBuffer.update(); }
 }
 
+/// @par Implementation
+/// The buffers are created only when the list is empty, so a second call
+/// (from resizeContainers()) or a `dialInputList` buffer made by
+/// configureImpl() is kept. Calling DialInputBuffer::initialise() again is
+/// harmless: it only recomputes sizes and re-checks the references. The
+/// mirror edges are written into every parameter reference of every
+/// buffer. The interface loop then matches each container by size: one
+/// shared element, or element `iDial` when the sizes are equal.
+/// @note The upper bound test on the set index uses `>` instead of `>=`;
+///       an index equal to the list size passes it, and the later `.at()`
+///       calls then throw std::out_of_range.
+/// @note In the interface loop, the second "Input buffers" comment heads the
+///       block that sets the bin references, not the input buffers.
 void DialCollection::setupDialInterfaceReferences(){
   LogThrowIf(_supervisedParameterSetIndex_==-1, "par set index not set.");
   LogThrowIf(_supervisedParameterSetIndex_>_parameterSetListPtr_->size(), "invalid selected parset index: " << _supervisedParameterSetIndex_);
@@ -202,7 +278,7 @@ void DialCollection::setupDialInterfaceReferences(){
 
       _dialInputBufferList_.resize(_dialInterfaceList_.size());
       for( int iDial = 0 ; iDial < int(_dialInterfaceList_.size()) ; iDial++ ){
-        DialInputBuffer::ParameterReference p{};
+        DialInputBuffer::ParameterReference p{}; // dial iDial reads parameter iDial of the set
         p.parSetIndex = _supervisedParameterSetIndex_;
         p.parIndex = iDial;
         _dialInputBufferList_[iDial].addParameterReference(p);
@@ -211,7 +287,7 @@ void DialCollection::setupDialInterfaceReferences(){
     else{
       // one parameter for every dial of the collection
       _dialInputBufferList_.resize(1);
-      DialInputBuffer::ParameterReference p{};
+      DialInputBuffer::ParameterReference p{}; // the supervised parameter, shared by every dial
       p.parSetIndex = _supervisedParameterSetIndex_;
       p.parIndex = _supervisedParameterIndex_;
       _dialInputBufferList_.back().addParameterReference(p);
@@ -281,6 +357,36 @@ void DialCollection::setupDialInterfaceReferences(){
 }
 
 // init protected
+/// @par Implementation
+/// Each `fillValue()` keeps the member unchanged when the key is absent, so
+/// the defaults in the header apply. For `applyConditions`, a structured
+/// entry with expression `x` is translated as follows:
+/// - `allowedRanges` [a, b): `(x >= a && x < b)`, OR-ed together;
+/// - `allowedValues` v: `x == v`, OR-ed together and with the ranges;
+/// - `excludedRanges` [a, b): `x < a && x >= b`, AND-ed to the rest;
+/// - `excludedValues` v: `x == v`, AND-ed to the rest.
+///
+/// The entries are then wrapped in parentheses and AND-ed, and the result
+/// overwrites any `applyCondition` string. The final string is compiled
+/// into a TFormula named `_applyConditionFormula_`.
+///
+/// @warning The `excludedRanges` term `x < a && x >= b` can never be true
+///          when a < b (which is enforced), so an entry with
+///          `excludedRanges` is always false and the dial is never applied.
+///          The `excludedValues` term `x == v` keeps only events equal to
+///          `v` instead of excluding them (and is never true for two
+///          different values).
+/// @warning When an entry has both allowed and excluded fields, the code
+///          wraps the allowed part with `ssCondEntry.str("(" + ... + ")")`.
+///          That call moves the stream's write position back to the start,
+///          so the following ` && ...` text overwrites the beginning of the
+///          expression instead of being appended.
+/// @note The two "allowed regions are linked with OR" comments next to the
+///       excluded terms are copies: those terms are joined with `&&`.
+/// @note The `parameterLimits` block at the end is not reached in practice:
+///       prepareConfig() declares the key deprecated, and
+///       ConfigReader::checkConfiguration() already stops the job when the
+///       key is present.
 void DialCollection::readParametersFromConfig(const ConfigReader &config_) {
   // globals for the dialSet
   config_.fillValue(_enableDialsSummary_, "printDialSummary");
@@ -313,8 +419,8 @@ void DialCollection::readParametersFromConfig(const ConfigReader &config_) {
         conditionsList.emplace_back(condEntry.getConfig().get<std::string>());
       }
       else if (condEntry.getConfig().is_structured()) {
-        auto expression = condEntry.fetchValue<std::string>("exp");
-        std::stringstream ssCondEntry;
+        auto expression = condEntry.fetchValue<std::string>("exp"); // the constrained variable
+        std::stringstream ssCondEntry; // condition being built for this entry
 
         // allowedRanges
         {
@@ -325,7 +431,7 @@ void DialCollection::readParametersFromConfig(const ConfigReader &config_) {
             for (auto &allowedRange: allowedRanges) {
               LogThrowIf(allowedRange.min >= allowedRange.max,
                          "Invalid range bounds: min(" << allowedRange.min << ") max(" << allowedRange.max << ")")
-              std::stringstream condSs;
+              std::stringstream condSs; // one term of the condition
               condSs << "(" << expression << " >= " << allowedRange.min;
               condSs << " && " << expression << " < " << allowedRange.max << ")";
               allowedRangesCond.emplace_back(condSs.str());
@@ -341,7 +447,7 @@ void DialCollection::readParametersFromConfig(const ConfigReader &config_) {
           if (not allowedValues.empty()) {
             std::vector<std::string> allowedValuesCond;
             for (auto &allowedValue: allowedValues) {
-              std::stringstream condSs;
+              std::stringstream condSs; // one term of the condition
               condSs << expression << " == " << allowedValue;
               allowedValuesCond.emplace_back(condSs.str());
             }
@@ -359,6 +465,7 @@ void DialCollection::readParametersFromConfig(const ConfigReader &config_) {
             // exclusion ranges are linked with &&: they are supposed to prevail
             ssCondEntry.str("(" + ssCondEntry.str() + ")");
             // after that no parenthesis needed since only && will be used
+            // (str(s) also rewinds the write position: see the warning above)
           }
 
           {
@@ -368,7 +475,7 @@ void DialCollection::readParametersFromConfig(const ConfigReader &config_) {
                 LogThrowIf(excludedRange.min >= excludedRange.max,
                            "Invalid range bounds: min(" << excludedRange.min << ") max(" << excludedRange.max
                                                         << ")")
-                std::stringstream condSs;
+                std::stringstream condSs; // one term of the condition
                 condSs << expression << " < " << excludedRange.min << " && ";
                 condSs << expression << " >= " << excludedRange.max;
                 excludedRangesCond.emplace_back(condSs.str());
@@ -382,7 +489,7 @@ void DialCollection::readParametersFromConfig(const ConfigReader &config_) {
             if (not excludedValues.empty()) {
               std::vector<std::string> excludedValuesCond;
               for (auto &excludedValue: excludedValues) {
-                std::stringstream condSs;
+                std::stringstream condSs; // one term of the condition
                 condSs << expression << " == " << excludedValue;
                 excludedValuesCond.emplace_back(condSs.str());
               }
@@ -439,6 +546,13 @@ void DialCollection::readParametersFromConfig(const ConfigReader &config_) {
     LogThrow("parameterLimits should be specified in the parameter definition.");
   }
 }
+/// @par Implementation
+/// Reads the common options from the top-level definition, configures the
+/// bin set from `parametersBinningPath`, then adds one Norm dial per bin;
+/// the loop variable is unused, the loop only counts the bins. The dial
+/// type is not forced: dials are Norm even if `dialType` says otherwise.
+/// DialInterface::setDial() copies the wrapper it gets, so each Norm dial is
+/// cloned once on the way in.
 bool DialCollection::initializeNormDialsWithParBinning() {
 
   if( not _config_.hasField("parametersBinningPath") ){
@@ -468,6 +582,24 @@ bool DialCollection::initializeNormDialsWithParBinning() {
   return true;
 }
 
+/// @par Implementation
+/// The TabulatedDialFactory constructor does the heavy work: it opens the
+/// library, calls its init function and allocates the table. The factory
+/// is moved into `_dialCollectionData_`; the update callback captures its
+/// index there rather than a pointer, and gets the collection as argument,
+/// so it stays valid when the collection is copied or moved. The binning
+/// variables become extra leaves so that DataDispenser loads them for
+/// TabulatedDialFactory::makeDial(). The callback reads the first input
+/// buffer without checking that one exists; initialize() creates it. Since
+/// DataDispenser fetches the factory as collection data 0, the factory must
+/// be the first collection data, which holds as each collection adds one.
+/// @note The configuration comment inside this function is partly
+///       outdated. TabulatedDialFactory reads `tableConfig` as one block
+///       (not a list), the variables key is `binningVariables` (not
+///       `variables`), and every key except `bins` is mandatory, including
+///       `initFunction`. The init function's return value is used as the
+///       table size, and a value below 1 is treated as a failure (not "0 for
+///       success"). The update function's return value is not checked.
 bool DialCollection::initializeDialsWithTabulation(const ConfigReader& dialsDefinition_) {
   // Initialize the Tabulated type.  That yaml for this is
   // tableConfig:
@@ -566,6 +698,19 @@ bool DialCollection::initializeDialsWithTabulation(const ConfigReader& dialsDefi
 
   return true;
 }
+/// @par Implementation
+/// Same steps as initializeDialsWithTabulation(), with a KrigedDialFactory
+/// and its weight variables as extra leaves.
+/// @note The configuration comment inside this function was copied from the
+///       tabulated case and is partly outdated. KrigedDialFactory reads
+///       `tableConfig` as one block with the mandatory keys `name`,
+///       `libraryPath`, `initFunction`, `initArguments`, `updateFunction`,
+///       `weightFunction` and `weightVariables` (there is no
+///       `binningFunction` or `variables` key), plus the optional
+///       `maxWeights`, `weightNormalization` and `bins`. The weight function
+///       is called through a pointer returning `int`, not `double`. As for
+///       tabulated dials, the init function returns the table size (below 1
+///       is a failure).
 bool DialCollection::initializeDialsWithKriging(const ConfigReader& dialsDefinition_){
   // Initialize the Tabulated type.  That yaml for this is
   // tableConfig:
@@ -671,6 +816,33 @@ bool DialCollection::initializeDialsWithKriging(const ConfigReader& dialsDefinit
   return true;
 }
 
+/// @par Implementation
+/// The bin set is configured first and never sorted, since bin `i` must
+/// match object `i` of the file. The dials copy the data they need, so the
+/// file is closed when `dialsTFile` goes out of scope.
+///
+/// `dialsList` case: each object goes through makeDial(const TObject*) with
+/// `_verboseShortCircuit_` on, so the debug log can say why a bin got no
+/// dial. Bins without a dial are then erased from the bin set, from the
+/// last to the first so the remaining indices stay valid. This keeps bin
+/// `i` and dial `i` aligned: DataDispenser uses the bin index found for an
+/// event as the dial index. The erase loop starts one past the last bin,
+/// which never matches an excluded index.
+///
+/// `dialsTreePath` case (deprecated): each tree entry gives a bin index
+/// (`kinematicBin`, not range-checked) and a TSpline3 or TGraph, read only
+/// for the Spline and Graph types. Every other leaf is read as an integer
+/// split variable and added to that bin as a zero-width edge. One dial is
+/// appended per entry that gives a dial; the bin set is not shrunk.
+///
+/// @note In the `dialsList` case, erasing bins of a set-wide collection
+///       leaves fewer dials than parameters, and
+///       setupDialInterfaceReferences() then stops the job.
+/// @note In the `dialsTreePath` case, the number of dials equals the number
+///       of entries that gave a dial, while the number of bins does not
+///       change. Unless the two match (or there is a single bin),
+///       setupDialInterfaceReferences() throws a size mismatch. For a
+///       Surface type, no branch is read and no dial is created.
 bool DialCollection::initializeDialsWithBinningFile(const ConfigReader& dialsDefinition) {
   if( not dialsDefinition.hasField("binning") ){ return false; }
 
@@ -707,11 +879,11 @@ bool DialCollection::initializeDialsWithBinningFile(const ConfigReader& dialsDef
                          << ") don't match the number of bins " << _dialBinSet_.getBinList().size()
     );
 
-    std::vector<int> excludedBins{};
+    std::vector<int> excludedBins{}; // bins without a dial; erased below
     int nBins(static_cast<int>(_dialBinSet_.getBinList().size()));
     _dialInterfaceList_.reserve( nBins ); // at most
     for( int iBin = 0 ; iBin < nBins ; iBin++ ){
-      TObject* binnedInitializer = dialsList->At(iBin);
+      TObject* binnedInitializer = dialsList->At(iBin); // unused (makeDial() refetches it)
 
       _verboseShortCircuit_ = true;
       auto dial = DialBaseObject( this->makeDial( dialsList->At(iBin) ) );
@@ -749,9 +921,9 @@ bool DialCollection::initializeDialsWithBinningFile(const ConfigReader& dialsDef
     auto* dialsTTree = (TTree*) dialsTFile->Get(objPath.c_str());
     LogThrowIf(dialsTTree== nullptr, objPath << " within " << filePath << " could not be opened.")
 
-    Int_t kinematicBin;
-    TSpline3* splinePtr = nullptr;
-    TGraph* graphPtr = nullptr;
+    Int_t kinematicBin; // bin index of the current entry (branch "kinematicBin")
+    TSpline3* splinePtr = nullptr; // branch buffer, used for the Spline type
+    TGraph* graphPtr = nullptr; // branch buffer, used for the Graph type
 
     // searching for additional split var
     std::vector<std::string> splitVarNameList;
@@ -763,9 +935,9 @@ bool DialCollection::initializeDialsWithBinningFile(const ConfigReader& dialsDef
     }
 
     // Hooking to the tree
-    std::vector<Int_t> splitVarValueList(splitVarNameList.size(), 0);
-    std::vector<std::pair<int, int>> splitVarBoundariesList(splitVarNameList.size(), std::pair<int, int>());
-    std::vector<std::vector<int>> splitVarValuesList(splitVarNameList.size(), std::vector<int>());
+    std::vector<Int_t> splitVarValueList(splitVarNameList.size(), 0); // branch buffers
+    std::vector<std::pair<int, int>> splitVarBoundariesList(splitVarNameList.size(), std::pair<int, int>()); // min/max; never read
+    std::vector<std::vector<int>> splitVarValuesList(splitVarNameList.size(), std::vector<int>()); // distinct values; never read
     dialsTTree->SetBranchAddress("kinematicBin", &kinematicBin);
     if( _dialType_ == DialType::Spline ) dialsTTree->SetBranchAddress("Spline", &splinePtr);
     if( _dialType_ == DialType::Graph ) dialsTTree->SetBranchAddress("Graph", &graphPtr);
@@ -799,7 +971,7 @@ bool DialCollection::initializeDialsWithBinningFile(const ConfigReader& dialsDef
       auto dial = makeDial(dialInitializer);
       if( dial != nullptr ){
         _dialInterfaceList_.emplace_back();
-        DialBaseObject obj;
+        DialBaseObject obj; // owns the dial; setDial() clones it
         obj.dialPtr = std::move(dial);
         _dialInterfaceList_.back().setDial( obj );
       }
@@ -812,9 +984,25 @@ bool DialCollection::initializeDialsWithBinningFile(const ConfigReader& dialsDef
   return true;
 }
 
+/// @par Implementation
+/// The cases are tested in a fixed order (Norm, Formula, CompiledLibDial,
+/// Tabulated, Kriged, then `binning`, then a tree expression), so the dial
+/// type wins over the other keys: a Norm definition with a `binning` key
+/// still gets one unbinned Norm dial. Formula and CompiledLibDial dials are
+/// built by makeDial(const ConfigReader&); for a binned formula, each copy
+/// gets its named TFormula parameters set to the centre of the bin edge
+/// with the same variable name.
+/// @note The response supervisor reads `minDialResponse` and
+///       `maxDialResponse` from the top-level `_config_`, not from the
+///       selected `dialsDefinitions` entry. A `minDialResponse` set only in
+///       the entry is therefore ignored (default 0), while a
+///       `maxDialResponse` set only in the entry is used through
+///       `_maxDialResponse_`.
+/// @note The existing Formula comment ("a single dial for all events") does
+///       not cover the binned case, which builds one dial per bin.
 bool DialCollection::initializeDialsWithDefinition() {
 
-  auto dialsDefinition = _config_;
+  auto dialsDefinition = _config_; // _config_ or its dialsDefinitions entry
   if( _config_.hasField("dialsDefinitions") ) {
     // Fetch the dialSet corresponding to the selected parameter
     dialsDefinition = this->fetchDialsDefinition(_config_.fetchValue<ConfigReader>("dialsDefinitions"));
@@ -928,6 +1116,11 @@ bool DialCollection::initializeDialsWithDefinition() {
   return true;
 }
 
+/// @par Implementation
+/// Walks the list in order and returns the first match. A named parameter
+/// is matched by name only; an unnamed one only by position. The entry is
+/// returned as a new ConfigReader with no key declared, which is why
+/// initializeDialsWithDefinition() calls prepareConfig() on it.
 ConfigReader DialCollection::fetchDialsDefinition(const ConfigReader& definitionsList_) const {
   auto* parSetPtr = this->getSupervisedParameterSet();
   LogThrowIf(parSetPtr == nullptr, "Can't fetch dial definition of parameter: par ref not set.");
@@ -945,16 +1138,23 @@ ConfigReader DialCollection::fetchDialsDefinition(const ConfigReader& definition
   return {};
 }
 
+/// @par Implementation
+/// Passes `this` to each callback, so callbacks need no captured pointer to
+/// the collection. Runs on the calling thread.
 void DialCollection::update() {
   for( auto& func : _dialCollectionCallbacks_ ){
     func(this);
   }
 }
 
+/// @par Implementation
+/// Appends a copy of @p callback to `_dialCollectionCallbacks_`.
 void DialCollection::addUpdate(const std::function<void(DialCollection* dc)>& callback) {
   _dialCollectionCallbacks_.emplace_back(callback);
 }
 
+/// @par Implementation
+/// One LogInfo line with getTitle().
 void DialCollection::printConfiguration() const {
 
   LogInfo << "DialCollection: " << this->getTitle() << std::endl;
@@ -963,7 +1163,18 @@ void DialCollection::printConfiguration() const {
 
 
 
+/// @par Implementation
+/// Returns a default-constructed Norm; the collection's options are not
+/// applied to it.
 std::unique_ptr<DialBase> DialCollection::makeDial() const{ return std::make_unique<Norm>(); }
+/// @par Implementation
+/// Dispatches on `_dialType_` to makeGraphDial(), makeSplineDial() or
+/// makeSurfaceDial(), then sets the extrapolation flag on the result. These
+/// helpers only read the collection's members (the verbose short-circuit
+/// string is written only while `_verboseShortCircuit_` is on, during
+/// configuration), which is what lets DataDispenser call this from several
+/// threads. The one exception is the unsynchronised static flag behind the
+/// one-time `pixar` message in makeSplineDial().
 std::unique_ptr<DialBase> DialCollection::makeDial(const TObject* src_) const {
   std::unique_ptr<DialBase> out{nullptr};
 
@@ -984,9 +1195,20 @@ std::unique_ptr<DialBase> DialCollection::makeDial(const TObject* src_) const {
 
   return out;
 }
+/// @par Implementation
+/// Reads `dialType` as a plain string (not as a DialType), so only the
+/// three spellings tested below are accepted. For a formula, `dialConfig`
+/// defaults to an empty block, and the missing `formulaStr` then makes
+/// GenericToolbox::Json::fetchValue() throw. For a compiled library,
+/// `dialConfig` is required.
+/// @warning Both branches read `dialConfig` through ConfigReader, and
+///          prepareConfig() does not declare that key. For an undeclared
+///          name, ConfigReader::getFieldDefinition() logs a "[DEV] Unknown
+///          field name" error and calls exit(); the `fillValue()` try/catch
+///          used by the formula branch does not catch that.
 std::unique_ptr<DialBase> DialCollection::makeDial(const ConfigReader& config_) const{
   std::unique_ptr<DialBase> dialBase{nullptr};
-  std::string dialType{};
+  std::string dialType{}; // the dialType key as written (string, not DialType)
 
   config_.fillValue(dialType, "dialType");
 
@@ -1012,6 +1234,12 @@ std::unique_ptr<DialBase> DialCollection::makeDial(const ConfigReader& config_) 
   return dialBase;
 }
 
+/// @par Implementation
+/// A TGraph is read without slopes (DialUtils::getPointListNoSlope()), since
+/// a linear graph does not use them; any other object goes through
+/// DialUtils::getPointList(), which handles TSpline3 and returns an empty
+/// list for other classes. The points are then cleaned and sorted
+/// (checkDialPointList()) before the short-circuit test.
 std::unique_ptr<DialBase> DialCollection::makeGraphDial(const TObject* src_) const {
   // always returns an invalid ptr if
   if( src_ == nullptr ){ return nullptr; }
@@ -1032,6 +1260,26 @@ std::unique_ptr<DialBase> DialCollection::makeGraphDial(const TObject* src_) con
 
   return makeGraphDial(splinePointList);
 }
+/// @par Implementation
+/// The knot slopes come from DialUtils::getPointList(), which takes them
+/// from TSpline3::Derivative() (building a TSpline3 from a TGraph first).
+/// Catmull-Rom and Akima overwrite them with their own slopes; the other
+/// kinds keep them. checkDialPointList() runs after the slopes are taken,
+/// so the knots kept by `definitionRange` keep the slopes of the full
+/// curve. The uniformity tolerance is relative to the mean knot spacing
+/// (DialUtils::isUniform()). With the default tolerance, non-uniform
+/// Catmull-Rom knots only produce an error log of each interval, and a
+/// Catmull-Rom spline is built anyway.
+/// @note `natural` is selected but never tested afterwards, so it builds the
+///       same dial as `not-a-knot`. The existing comment saying that the
+///       not-a-knot and natural slopes are calculated by "FillFromGraph and
+///       FillFromSpoline" is outdated: both come from
+///       DialUtils::getPointList().
+/// @note The branch for two points or fewer cannot run:
+///       makeDialShortCircuit() already handles those lists, because
+///       SHORT_CIRCUIT_SMALL_SPLINES is defined.
+/// @note The `pixar` option prints a message to std::cout once per process,
+///       outside the logger, through an unsynchronised static flag.
 std::unique_ptr<DialBase> DialCollection::makeSplineDial(const TObject* src_) const{
   // always returns an invalid ptr if
   if( src_ == nullptr ){ return nullptr; }
@@ -1051,7 +1299,7 @@ std::unique_ptr<DialBase> DialCollection::makeSplineDial(const TObject* src_) co
   if( _dialOptions_.find("pixar") != std::string::npos) {
     splType = "catmull-rom";
     // sneaky output... logger would tattle on me.
-    static bool woody=true;
+    static bool woody=true; // true until the message has been printed once
     if (woody) std::cout << std::endl << std::endl << "You got a friend in me!" << std::endl;
     woody=false;
   }
@@ -1060,18 +1308,19 @@ std::unique_ptr<DialBase> DialCollection::makeSplineDial(const TObject* src_) co
 
   // Get the numeric tolerance for when a uniform spline can be used.  We
   // should be able to set this in the DialSubType.
+  // (It can now be set: the "uniformity(TOL)" option is parsed below.)
   const double defUniformityTolerance{16*std::numeric_limits<float>::epsilon()};
   double uniformityTolerance{defUniformityTolerance};
   if (_dialOptions_.find("uniformity(") != std::string::npos) {
-    std::size_t bg = _dialOptions_.find("uniformity(");
+    std::size_t bg = _dialOptions_.find("uniformity("); // index of '('
     bg = _dialOptions_.find('(',bg);
-    std::size_t en = _dialOptions_.find(')',bg);
+    std::size_t en = _dialOptions_.find(')',bg); // index of ')', then length
     LogThrowIf(en == std::string::npos,
                "Invalid spline uniformity with dialSubType: " << _dialOptions_
                << " dial: " << getTitle());
     en = en - bg;
     std::string uniformityString = _dialOptions_.substr(bg+1,en-1);
-    std::istringstream unif(uniformityString);
+    std::istringstream unif(uniformityString); // parses the number between the parentheses
     unif >> uniformityTolerance;
   }
 
@@ -1125,7 +1374,7 @@ std::unique_ptr<DialBase> DialCollection::makeSplineDial(const TObject* src_) co
         LogError << "Catmull-rom splines need a uniformly spaced points"
                  << " Dial: " << getTitle()
                  << std::endl;
-        double step = (splinePointList.back().x-splinePointList.front().x)/(static_cast<double>(splinePointList.size())-1.);
+        double step = (splinePointList.back().x-splinePointList.front().x)/(static_cast<double>(splinePointList.size())-1.); // mean knot spacing
         for (int i = 0; i<splinePointList.size()-1; ++i) {
           LogError << i << " --  X: " << splinePointList[i].x
                    << " X+1: " << splinePointList[i+1].x
@@ -1184,6 +1433,13 @@ std::unique_ptr<DialBase> DialCollection::makeSplineDial(const TObject* src_) co
   return out;
 
 }
+/// @par Implementation
+/// The options are compared as whole strings, case included, unlike the
+/// substring search of makeSplineDial(). The histogram is used as it is:
+/// no definition range, sorting or short circuit applies to surfaces.
+/// @note The existing comment in the Bilinear branch about a "cached
+///       version" does not match the code: there is no cached variant
+///       here, only Bilinear and Bicubic.
 std::unique_ptr<DialBase> DialCollection::makeSurfaceDial(const TObject* src_) const{
   // always returns an invalid ptr if
   if( src_ == nullptr ){ return nullptr; }
@@ -1219,10 +1475,15 @@ std::unique_ptr<DialBase> DialCollection::makeSurfaceDial(const TObject* src_) c
   return dialBase;
 }
 
+/// @par Implementation
+/// The list is only copied when at least one point is out of range. Both
+/// range bounds are inclusive (GenericToolbox::Range::isInBounds()). The
+/// `mirrorDefinitionRange` test comes last, so it stops the job even after
+/// the points were filtered and sorted.
 void DialCollection::checkDialPointList(std::vector<DialUtils::DialPoint>& pointList_) const{
 
   if( _definitionRange_.hasBound() and not std::all_of(pointList_.begin(), pointList_.end(), [&](DialUtils::DialPoint dialPoint){ return _definitionRange_.isInBounds(dialPoint.x); }) ){
-    auto temp{pointList_}; temp.clear();
+    auto temp{pointList_}; temp.clear(); // kept points
     for( auto& point : pointList_ ) {
       if( not _definitionRange_.isInBounds(point.x) ){ continue; }
       temp.emplace_back(point);
@@ -1241,6 +1502,16 @@ void DialCollection::checkDialPointList(std::vector<DialUtils::DialPoint>& point
   }
 
 }
+/// @par Implementation
+/// Flatness is tested with DialUtils::isFlat() (every y within two float
+/// epsilons of the first), and "equal to 1" uses the same float-based
+/// tolerance. Only the first point's value is used for the result. The
+/// two-point case is guarded by SHORT_CIRCUIT_SMALL_SPLINES, which is
+/// defined just before the test, so it is always active: a Spline
+/// collection gets a linear Graph dial for two points.
+/// @note The empty-list case does not update `_verboseShortCircuitStr_`,
+///       so the debug log of initializeDialsWithBinningFile() then shows the
+///       reason recorded for an earlier bin.
 bool DialCollection::makeDialShortCircuit(const std::vector<DialUtils::DialPoint>& pointList_, std::unique_ptr<DialBase>& dial_) const{
   dial_ = nullptr;
 
@@ -1263,6 +1534,7 @@ bool DialCollection::makeDialShortCircuit(const std::vector<DialUtils::DialPoint
     return true;
   }
 
+  // Defined right here, so the block below is always compiled in.
 #define SHORT_CIRCUIT_SMALL_SPLINES
 #ifdef  SHORT_CIRCUIT_SMALL_SPLINES
   if( pointList_.size() <= 2 ) {
@@ -1274,6 +1546,10 @@ bool DialCollection::makeDialShortCircuit(const std::vector<DialUtils::DialPoint
 
   return false;
 }
+/// @par Implementation
+/// This function and makeDialShortCircuit() call each other, but never in
+/// a loop: zero or one point is resolved by makeDialShortCircuit() without
+/// coming back here, and two points or more build the Graph directly.
 std::unique_ptr<DialBase> DialCollection::makeGraphDial(const std::vector<DialUtils::DialPoint>& pointList_) const{
 
   if( pointList_.empty() or pointList_.size() == 1 ){
